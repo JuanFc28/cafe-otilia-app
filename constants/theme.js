@@ -8,7 +8,7 @@ import { Platform } from "react-native";
 const tintColorLight = "#0a7ea4";
 const tintColorDark = "#fff";
 
-export const Colors = {
+export const COLORS = {
   primary: "#3E2723", // Café Espresso
   secondary: "#D84315", // Naranja Tostado
   background: "#FFF8E1", // Crema Latte

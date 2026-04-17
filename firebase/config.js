@@ -1,7 +1,11 @@
 // Import the functions you need from the SDKs you need
-import { getAnalytics } from "firebase/analytics";
-import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getApp, getApps, initializeApp } from "firebase/app";
+import {
+  getAuth,
+  getReactNativePersistence,
+  initializeAuth,
+} from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
@@ -18,10 +22,26 @@ const firebaseConfig = {
   measurementId: "G-LRWK3BLQDF",
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+// 2. Variables globales para exportar
+let app;
+let auth;
 
-// Inicializar servicios
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+// 3. Verificamos si Firebase ya fue inicializado por Expo
+if (getApps().length === 0) {
+  // Si no existe, creamos la app y le ponemos la persistencia
+  app = initializeApp(firebaseConfig);
+  auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(AsyncStorage),
+  });
+} else {
+  // Si ya existe (por guardar un archivo), recuperamos la instancia
+  app = getApp();
+  auth = getAuth(app);
+}
+
+// 4. Inicializamos la base de datos
+const db = getFirestore(app);
+
+// 5. Exportamos para poder usarlos en otras pantallas
+export { auth, db };
+export default app;

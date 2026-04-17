@@ -1,33 +1,64 @@
-import { Tabs } from 'expo-router';
-import React from 'react';
-
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Ionicons } from "@expo/vector-icons";
+import { Tabs } from "expo-router";
+import React from "react";
+import { COLORS } from "../../constants/theme";
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerShown: false,
-        tabBarButton: HapticTab,
-      }}>
+        // Color del icono cuando está seleccionado (Naranja)
+        tabBarActiveTintColor: COLORS.secondary,
+        // Color del icono cuando no está seleccionado (Gris)
+        tabBarInactiveTintColor: COLORS.gray,
+        // Estilo de la barrita de abajo
+        tabBarStyle: {
+          backgroundColor: COLORS.white,
+          borderTopColor: "#EEEEEE",
+        },
+        // Estilo de la cabecera (Header) en la parte superior
+        headerStyle: {
+          backgroundColor: COLORS.primary, // Café
+        },
+        headerTintColor: COLORS.white,
+        headerTitleStyle: {
+          fontWeight: "bold",
+        },
+      }}
+    >
+      {/* PANTALLA 1: HOME (index.jsx) */}
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          title: "Inicio",
+          headerShown: false,
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="home" size={24} color={color} />
+          ),
         }}
       />
+
+      {/* Las otras pantallas las iremos descomentando cuando las creemos */}
+
       <Tabs.Screen
-        name="explore"
+        name="stats"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          title: "Estadísticas",
+          headerShown: false,
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="bar-chart" size={24} color={color} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="stock"
+        options={{
+          title: "Inventario",
+          headerShown: false,
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="cube" size={24} color={color} />
+          ),
         }}
       />
     </Tabs>

@@ -1,98 +1,250 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { router } from "expo-router";
+import { useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+// Importamos updateProfile para poder guardar el nombre
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  updateProfile,
+} from "firebase/auth";
+import { auth } from "../firebase/config";
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+// Importamos nuestros colores
+import { COLORS } from "../constants/theme";
 
-export default function HomeScreen() {
+export default function LoginScreen() {
+  const [name, setName] = useState(""); // <-- Nuevo estado para el nombre
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isLogin, setIsLogin] = useState(true);
+  const [loading, setLoading] = useState(false);
+
+  const handleAuthentication = async () => {
+    // Validación para el login
+    if (isLogin && (email === "" || password === "")) {
+      Alert.alert("Error", "Por favor llena todos los campos");
+      return;
+    }
+    // Validación extra para el registro
+    if (!isLogin && (name === "" || email === "" || password === "")) {
+      Alert.alert(
+        "Error",
+        "Por favor llena todos los campos, incluido tu nombre",
+      );
+      return;
+    }
+
+    setLoading(true);
+    try {
+      if (isLogin) {
+        // Lógica de Inicio de Sesión
+        await signInWithEmailAndPassword(auth, email, password);
+        router.replace("/(tabs)");
+      } else {
+        // Lógica de Registro
+        const userCredential = await createUserWithEmailAndPassword(
+          auth,
+          email,
+          password,
+        );
+
+        // <-- Guardamos el nombre en el perfil del usuario de Firebase
+        await updateProfile(userCredential.user, {
+          displayName: name,
+        });
+
+        Alert.alert("Éxito", `Cuenta creada correctamente para ${name}`);
+        router.replace("/(tabs)");
+      }
+    } catch (error) {
+      console.log(error);
+      if (
+        error.code === "auth/invalid-credential" ||
+        error.code === "auth/user-not-found" ||
+        error.code === "auth/wrong-password"
+      ) {
+        Alert.alert("Error", "Correo o contraseña incorrectos");
+      } else if (error.code === "auth/email-already-in-use") {
+        Alert.alert("Error", "Este correo ya está registrado");
+      } else if (error.code === "auth/weak-password") {
+        Alert.alert("Error", "La contraseña debe tener al menos 6 caracteres");
+      } else {
+        Alert.alert("Error", "Ocurrió un problema, intenta de nuevo");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={styles.container}
+    >
+      <View style={styles.headerContainer}>
         <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
+          source={require("../assets/images/otiLogo2.png")}
+          style={styles.logo}
+          resizeMode="contain"
         />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+        <Text style={styles.title}>GESTIÓN DE NEGOCIO</Text>
+      </View>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+      <View style={styles.formContainer}>
+        {/* <-- CAMPO DE NOMBRE: Solo se muestra si NO estamos en Login (isLogin === false) --> */}
+        {!isLogin && (
+          <View style={styles.inputContainer}>
+            <Text style={styles.iconPlaceholder}>👤</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Tu nombre"
+              placeholderTextColor="#999"
+              autoCapitalize="words"
+              value={name}
+              onChangeText={setName}
+            />
+          </View>
+        )}
+
+        <View style={styles.inputContainer}>
+          <Text style={styles.iconPlaceholder}>✉️</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Correo electrónico"
+            placeholderTextColor="#999"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            value={email}
+            onChangeText={setEmail}
+          />
+        </View>
+
+        <View style={styles.inputContainer}>
+          <Text style={styles.iconPlaceholder}>🔒</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Contraseña"
+            placeholderTextColor="#999"
+            secureTextEntry
+            value={password}
+            onChangeText={setPassword}
+          />
+        </View>
+
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={handleAuthentication}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color={COLORS.white} />
+          ) : (
+            <Text style={styles.buttonText}>
+              {isLogin ? "INICIAR SESIÓN →" : "REGISTRARSE →"}
+            </Text>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      <TouchableOpacity
+        style={styles.footerContainer}
+        onPress={() => setIsLogin(!isLogin)}
+      >
+        <Text style={styles.footerText}>
+          {isLogin ? "¿No tienes cuenta? " : "¿Ya tienes cuenta? "}
+          <Text style={styles.footerTextBold}>
+            {isLogin ? "Regístrate" : "Inicia Sesión"}
+          </Text>
+        </Text>
+      </TouchableOpacity>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  container: {
+    flex: 1,
+    backgroundColor: "#3E2723",
+    justifyContent: "center",
+    padding: 24,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  headerContainer: {
+    alignItems: "center",
+    marginBottom: 40,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  logo: {
+    width: 350,
+    height: 350,
+    marginBottom: -100,
+    marginTop: -50,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: "bold",
+    color: "#FFFFFF",
+    letterSpacing: 1.5,
+  },
+  formContainer: {
+    width: "100%",
+  },
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    marginBottom: 16,
+    paddingHorizontal: 16,
+    height: 56,
+  },
+  iconPlaceholder: {
+    fontSize: 18,
+    marginRight: 12,
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    color: "#212121",
+  },
+  primaryButton: {
+    backgroundColor: "#D84315",
+    borderRadius: 12,
+    height: 56,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  buttonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "bold",
+    letterSpacing: 1,
+  },
+  footerContainer: {
+    marginTop: 40,
+    alignItems: "center",
+  },
+  footerText: {
+    color: "#FFF8E1",
+    fontSize: 14,
+  },
+  footerTextBold: {
+    fontWeight: "bold",
+    color: "#FFFFFF",
   },
 });
