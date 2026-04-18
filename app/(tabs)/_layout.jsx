@@ -7,16 +7,12 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        // Color del icono cuando está seleccionado (Naranja)
         tabBarActiveTintColor: COLORS.secondary,
-        // Color del icono cuando no está seleccionado (Gris)
         tabBarInactiveTintColor: COLORS.gray,
-        // Estilo de la barrita de abajo
         tabBarStyle: {
           backgroundColor: COLORS.white,
           borderTopColor: "#EEEEEE",
         },
-        // Estilo de la cabecera (Header) en la parte superior
         headerStyle: {
           backgroundColor: COLORS.primary, // Café
         },
@@ -28,7 +24,7 @@ export default function TabLayout() {
     >
       {/* PANTALLA 1: HOME (index.jsx) */}
       <Tabs.Screen
-        name="index"
+        name="homeScreen"
         options={{
           title: "Inicio",
           headerShown: false,
@@ -38,8 +34,7 @@ export default function TabLayout() {
         }}
       />
 
-      {/* Las otras pantallas las iremos descomentando cuando las creemos */}
-
+      {/* PANTALLA 2: ESTADÍSTICAS */}
       <Tabs.Screen
         name="stats"
         options={{
@@ -51,6 +46,7 @@ export default function TabLayout() {
         }}
       />
 
+      {/* PANTALLA 3: INVENTARIO */}
       <Tabs.Screen
         name="stock"
         options={{

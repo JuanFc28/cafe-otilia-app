@@ -1,12 +1,13 @@
 // Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+// IMPORTA LAS DOS FORMAS DE PERSISTENCIA
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { getApp, getApps, initializeApp } from "firebase/app";
 import {
-  getAuth,
+  browserLocalPersistence,
   getReactNativePersistence,
   initializeAuth,
 } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { Platform } from "react-native"; // IMPORTA PLATFORM
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
@@ -22,26 +23,15 @@ const firebaseConfig = {
   measurementId: "G-LRWK3BLQDF",
 };
 
-// 2. Variables globales para exportar
-let app;
-let auth;
+const app = initializeApp(firebaseConfig);
 
-// 3. Verificamos si Firebase ya fue inicializado por Expo
-if (getApps().length === 0) {
-  // Si no existe, creamos la app y le ponemos la persistencia
-  app = initializeApp(firebaseConfig);
-  auth = initializeAuth(app, {
-    persistence: getReactNativePersistence(AsyncStorage),
-  });
-} else {
-  // Si ya existe (por guardar un archivo), recuperamos la instancia
-  app = getApp();
-  auth = getAuth(app);
-}
+// LA SOLUCIÓN: Usar la persistencia correcta según donde corra la app
+const auth = initializeAuth(app, {
+  persistence:
+    Platform.OS === "web"
+      ? browserLocalPersistence
+      : getReactNativePersistence(AsyncStorage),
+});
 
-// 4. Inicializamos la base de datos
-const db = getFirestore(app);
+export { auth };
 
-// 5. Exportamos para poder usarlos en otras pantallas
-export { auth, db };
-export default app;

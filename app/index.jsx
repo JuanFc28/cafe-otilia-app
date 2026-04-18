@@ -1,8 +1,9 @@
-import { router } from "expo-router";
-import { useState } from "react";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -12,31 +13,39 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-// Importamos updateProfile para poder guardar el nombre
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  updateProfile,
-} from "firebase/auth";
-import { auth } from "../firebase/config";
-
-// Importamos nuestros colores
 import { COLORS } from "../constants/theme";
 
+// IMPORTAMOS LAS FUNCIONES DESDE TU ARCHIVO CONTEXT
+import { useAuth } from "../context/AuthContext";
+
 export default function LoginScreen() {
-  const [name, setName] = useState(""); // <-- Nuevo estado para el nombre
+  const { login, register } = useAuth();
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
 
+  // BLOQUEO FÍSICO DEL BOTÓN ATRÁS EN ANDROID
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        BackHandler.exitApp();
+        return true;
+      };
+      const subscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onBackPress,
+      );
+      return () => subscription.remove();
+    }, []),
+  );
+
   const handleAuthentication = async () => {
-    // Validación para el login
     if (isLogin && (email === "" || password === "")) {
       Alert.alert("Error", "Por favor llena todos los campos");
       return;
     }
-    // Validación extra para el registro
     if (!isLogin && (name === "" || email === "" || password === "")) {
       Alert.alert(
         "Error",
@@ -48,40 +57,14 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       if (isLogin) {
-        // Lógica de Inicio de Sesión
-        await signInWithEmailAndPassword(auth, email, password);
-        router.replace("/(tabs)");
+        await login(email, password);
       } else {
-        // Lógica de Registro
-        const userCredential = await createUserWithEmailAndPassword(
-          auth,
-          email,
-          password,
-        );
-
-        // <-- Guardamos el nombre en el perfil del usuario de Firebase
-        await updateProfile(userCredential.user, {
-          displayName: name,
-        });
-
+        await register(email, password, name);
         Alert.alert("Éxito", `Cuenta creada correctamente para ${name}`);
-        router.replace("/(tabs)");
       }
     } catch (error) {
       console.log(error);
-      if (
-        error.code === "auth/invalid-credential" ||
-        error.code === "auth/user-not-found" ||
-        error.code === "auth/wrong-password"
-      ) {
-        Alert.alert("Error", "Correo o contraseña incorrectos");
-      } else if (error.code === "auth/email-already-in-use") {
-        Alert.alert("Error", "Este correo ya está registrado");
-      } else if (error.code === "auth/weak-password") {
-        Alert.alert("Error", "La contraseña debe tener al menos 6 caracteres");
-      } else {
-        Alert.alert("Error", "Ocurrió un problema, intenta de nuevo");
-      }
+      Alert.alert("Error", "Credenciales incorrectas o problema de conexión");
     } finally {
       setLoading(false);
     }
@@ -102,7 +85,6 @@ export default function LoginScreen() {
       </View>
 
       <View style={styles.formContainer}>
-        {/* <-- CAMPO DE NOMBRE: Solo se muestra si NO estamos en Login (isLogin === false) --> */}
         {!isLogin && (
           <View style={styles.inputContainer}>
             <Text style={styles.iconPlaceholder}>👤</Text>
@@ -116,7 +98,6 @@ export default function LoginScreen() {
             />
           </View>
         )}
-
         <View style={styles.inputContainer}>
           <Text style={styles.iconPlaceholder}>✉️</Text>
           <TextInput
@@ -129,7 +110,6 @@ export default function LoginScreen() {
             onChangeText={setEmail}
           />
         </View>
-
         <View style={styles.inputContainer}>
           <Text style={styles.iconPlaceholder}>🔒</Text>
           <TextInput
@@ -172,6 +152,7 @@ export default function LoginScreen() {
   );
 }
 
+// ESTILOS SE QUEDAN IGUAL
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -179,25 +160,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 24,
   },
-  headerContainer: {
-    alignItems: "center",
-    marginBottom: 40,
-  },
-  logo: {
-    width: 350,
-    height: 350,
-    marginBottom: -100,
-    marginTop: -50,
-  },
+  headerContainer: { alignItems: "center", marginBottom: 40 },
+  logo: { width: 350, height: 350, marginBottom: -100, marginTop: -50 },
   title: {
     fontSize: 28,
     fontWeight: "bold",
     color: "#FFFFFF",
     letterSpacing: 1.5,
   },
-  formContainer: {
-    width: "100%",
-  },
+  formContainer: { width: "100%" },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -207,15 +178,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     height: 56,
   },
-  iconPlaceholder: {
-    fontSize: 18,
-    marginRight: 12,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: "#212121",
-  },
+  iconPlaceholder: { fontSize: 18, marginRight: 12 },
+  input: { flex: 1, fontSize: 16, color: "#212121" },
   primaryButton: {
     backgroundColor: "#D84315",
     borderRadius: 12,
@@ -223,10 +187,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginTop: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
     elevation: 4,
   },
   buttonText: {
@@ -235,16 +195,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     letterSpacing: 1,
   },
-  footerContainer: {
-    marginTop: 40,
-    alignItems: "center",
-  },
-  footerText: {
-    color: "#FFF8E1",
-    fontSize: 14,
-  },
-  footerTextBold: {
-    fontWeight: "bold",
-    color: "#FFFFFF",
-  },
+  footerContainer: { marginTop: 40, alignItems: "center" },
+  footerText: { color: "#FFF8E1", fontSize: 14 },
+  footerTextBold: { fontWeight: "bold", color: "#FFFFFF" },
 });

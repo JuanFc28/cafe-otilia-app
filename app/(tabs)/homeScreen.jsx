@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React from "react";
 import {
+  Alert,
   Platform,
   ScrollView,
   StatusBar,
@@ -13,16 +14,42 @@ import {
 import { COLORS } from "../../constants/theme";
 import { auth } from "../../firebase/config";
 
+// IMPORTAMOS LOGOUT DIRECTO DE TU CARPETA CONTEXT
+import { useAuth } from "@/context/AuthContext";
+
 export default function HomeScreen() {
   const userName = auth.currentUser?.displayName || "Juan";
+  const { logout } = useAuth(); // EXTRAEMOS LOGOUT
 
-  // Datos de ejemplo para las notificaciones [cite: 1]
   const notifications = [
     { id: "1", name: "Juan Cruz", status: "hace 1 mes" },
     { id: "2", name: "Juan Cruz", status: "hace 15 dias" },
-    { id: "3", name: "Juan Cruz", status: "hace 1 mes" },
-    { id: "4", name: "Juan Cruz", status: "hace 1 mes" },
   ];
+
+  const handleLogout = () => {
+    Alert.alert(
+      "Cerrar Sesión",
+      "¿Estás seguro que deseas salir de tu cuenta?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Salir",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              // IGUAL QUE EN IMPULSELAB: Solo ejecutamos logout.
+              // El _layout.jsx detectará el cambio y te sacará automáticamente.
+              await logout();
+              router.replace("/");
+            } catch (error) {
+              console.log("Error al salir:", error);
+              Alert.alert("Error", "No se pudo cerrar la sesión.");
+            }
+          },
+        },
+      ],
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -30,20 +57,20 @@ export default function HomeScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* CABECERA CURVA CON SALUDO */}
         <View style={styles.curvedHeader}>
-          {/* Espacio extra para que no se pegue al reloj/batería del celular */}
           <View
             style={{
               height: Platform.OS === "ios" ? 50 : StatusBar.currentHeight + 20,
             }}
           />
           <Text style={styles.greetingText}>¡Hola {userName}! 👋</Text>
+
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <Ionicons name="log-out-outline" size={28} color={COLORS.white} />
+          </TouchableOpacity>
         </View>
 
-        {/* CONTENIDO PRINCIPAL (Le damos un margen negativo para que "suba" y se superponga a la curva) */}
         <View style={styles.innerContainer}>
-          {/* BOTONES PRINCIPALES */}
           <View style={styles.actionsContainer}>
             <TouchableOpacity
               style={styles.actionCard}
@@ -68,7 +95,7 @@ export default function HomeScreen() {
             <TouchableOpacity
               style={styles.actionCard}
               activeOpacity={0.7}
-              onPress={() => router.push("/clients")}
+              onPress={() => router.push("/clients/clientsList")}
             >
               <View
                 style={[
@@ -86,11 +113,9 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* SECCIÓN DE NOTIFICACIONES */}
           <View style={styles.notificationsHeader}>
             <Text style={styles.sectionTitle}>Notificaciones</Text>
           </View>
-
           {notifications.map((item) => (
             <View key={item.id} style={styles.notificationItem}>
               <View style={styles.notificationIcon}>
@@ -121,45 +146,27 @@ export default function HomeScreen() {
   );
 }
 
+// ESTILOS SE QUEDAN IGUAL
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background, // Crema Latte
-  },
-  scrollContent: {
-    paddingBottom: 20,
-  },
+  container: { flex: 1, backgroundColor: COLORS.background },
+  scrollContent: { paddingBottom: 20 },
   curvedHeader: {
-    backgroundColor: COLORS.primary, // Café Espresso
+    backgroundColor: COLORS.primary,
     paddingHorizontal: 20,
-    paddingBottom: 60, // Más padding abajo para la curva
+    paddingBottom: 60,
     borderBottomLeftRadius: 40,
     borderBottomRightRadius: 40,
     alignItems: "center",
   },
-  greetingText: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: COLORS.white, // Lo ponemos en blanco para que resalte sobre el café
-  },
-  innerContainer: {
-    paddingHorizontal: 20,
-    marginTop: -30, // ¡Magia! Sube las tarjetas para que se sobrepongan un poco al header café
-  },
-  actionsContainer: {
-    gap: 15,
-    marginBottom: 30,
-  },
+  greetingText: { fontSize: 28, fontWeight: "bold", color: COLORS.white },
+  innerContainer: { paddingHorizontal: 20, marginTop: -30 },
+  actionsContainer: { gap: 15, marginBottom: 30 },
   actionCard: {
     backgroundColor: COLORS.white,
     borderRadius: 15,
     padding: 20,
     flexDirection: "row",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 }, // Sombra más notoria
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
     elevation: 5,
   },
   iconContainer: {
@@ -170,26 +177,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginRight: 20,
   },
-  actionTextContainer: {
-    flex: 1,
-  },
-  actionTitle: {
-    fontSize: 16,
-    color: COLORS.gray, // Suavizamos este texto para que resalte el subtítulo
-  },
-  actionSubtitle: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: COLORS.primary,
-  },
-  notificationsHeader: {
-    marginBottom: 15,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: COLORS.primary,
-  },
+  actionTextContainer: { flex: 1 },
+  actionTitle: { fontSize: 16, color: COLORS.gray },
+  actionSubtitle: { fontSize: 22, fontWeight: "bold", color: COLORS.primary },
+  notificationsHeader: { marginBottom: 15 },
+  sectionTitle: { fontSize: 20, fontWeight: "bold", color: COLORS.primary },
   notificationItem: {
     backgroundColor: COLORS.white,
     padding: 15,
@@ -199,29 +191,18 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     borderLeftWidth: 4,
     borderLeftColor: COLORS.secondary,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
     elevation: 2,
   },
-  notificationIcon: {
-    marginRight: 15,
-  },
-  notificationInfo: {
-    flex: 1,
-  },
-  customerName: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: COLORS.text,
-  },
-  lastPurchaseText: {
-    fontSize: 14,
-    color: COLORS.gray,
-    marginTop: 2,
-  },
-  whatsappButton: {
+  notificationIcon: { marginRight: 15 },
+  notificationInfo: { flex: 1 },
+  customerName: { fontSize: 16, fontWeight: "bold", color: COLORS.text },
+  lastPurchaseText: { fontSize: 14, color: COLORS.gray, marginTop: 2 },
+  whatsappButton: { padding: 5 },
+  logoutButton: {
+    position: "absolute",
+    top: Platform.OS === "ios" ? 50 : StatusBar.currentHeight + 20,
+    right: 20,
     padding: 5,
+    zIndex: 10,
   },
 });

@@ -12,7 +12,7 @@
     ".expo/types/**/*.ts",
     "expo-env.d.ts",
     "constants/theme.js",
-    "app/(tabs)/index.jsx",
+    "app/(tabs)/homeScreen.jsx",
     "app/_layout.jsx",
     "app/(tabs)/_layout.jsx"
   ]
