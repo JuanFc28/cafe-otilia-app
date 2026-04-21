@@ -1,19 +1,18 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
 import {
-    Platform,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { COLORS } from "../../constants/theme";
 
 export default function StockScreen() {
-  // Ahora guardamos los valores como strings para poder escribir "0.500" sin que se borren los ceros o el punto
   const [stock, setStock] = useState({
     grano: "3",
     molido: "2",
@@ -35,7 +34,7 @@ export default function StockScreen() {
     });
   };
 
-  // Función para cuando tu papá escribe con el teclado
+  // Función para escribir con el teclado
   const handleInputChange = (type, text) => {
     // Expresión regular: Solo permite números y UN punto decimal
     const sanitizedText = text.replace(/[^0-9.]/g, "");
@@ -47,6 +46,7 @@ export default function StockScreen() {
 
   return (
     <View style={styles.container}>
+      {/*Header*/}
       <View style={styles.header}>
         <View
           style={{
@@ -81,17 +81,16 @@ export default function StockScreen() {
                 style={styles.stepButton}
                 onPress={() => updateStock("grano", -1)}
               >
-                {/* AUMENTAMOS EL TAMAÑO DEL ICONO DE 20 a 28 */}
                 <Ionicons name="remove" size={28} color={COLORS.primary} />
               </TouchableOpacity>
 
               <View style={styles.countBox}>
                 <TextInput
                   style={styles.countInput}
-                  keyboardType="decimal-pad" // <-- TECLADO NUMÉRICO CON PUNTO
+                  keyboardType="decimal-pad"
                   value={stock.grano}
                   onChangeText={(text) => handleInputChange("grano", text)}
-                  selectTextOnFocus={true} // Selecciona todo el texto al tocar para borrar más rápido
+                  selectTextOnFocus={true}
                 />
               </View>
 
@@ -99,7 +98,6 @@ export default function StockScreen() {
                 style={styles.stepButton}
                 onPress={() => updateStock("grano", 1)}
               >
-                {/* AUMENTAMOS EL TAMAÑO DEL ICONO DE 20 a 28 */}
                 <Ionicons name="add" size={28} color={COLORS.primary} />
               </TouchableOpacity>
             </View>
@@ -201,9 +199,8 @@ export default function StockScreen() {
     </View>
   );
 }
-
+//Estilos
 const styles = StyleSheet.create({
-  // ... (container, header, title, scrollContent, itemsContainer, stockCard, cardInfo, iconBox, productName, productWeight se quedan igual)
   container: { flex: 1, backgroundColor: COLORS.background },
   header: {
     backgroundColor: COLORS.primary,
@@ -250,8 +247,8 @@ const styles = StyleSheet.create({
     padding: 5,
   },
   stepButton: {
-    width: 40, // <-- ANTES: 35. Cámbialo a 50 o 55 si lo quieres aún más grande
-    height: 45, // <-- ANTES: 35. Cámbialo a 50 o 55 si lo quieres aún más grande
+    width: 40,
+    height: 45,
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: COLORS.white,
@@ -264,19 +261,17 @@ const styles = StyleSheet.create({
   },
   countBox: {
     paddingHorizontal: 5,
-    minWidth: 55, // <-- Lo hicimos más ancho para que quepan números como "1.250"
+    minWidth: 55,
     alignItems: "center",
   },
   countInput: {
-    // <-- ESTILO NUEVO PARA EL TECLADO
     fontSize: 18,
     fontWeight: "bold",
     color: COLORS.primary,
     textAlign: "center",
     width: "100%",
-    padding: 0, // Quita el padding automático de Android
+    padding: 0,
   },
-  // ▲▲ FIN DE LA ZONA DE EDICIÓN ▲▲
 
   orderButton: {
     backgroundColor: COLORS.secondary,

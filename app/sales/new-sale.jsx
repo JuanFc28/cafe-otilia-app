@@ -1,20 +1,19 @@
 import { Ionicons } from "@expo/vector-icons";
+import { router, Stack } from "expo-router";
 import { useState } from "react";
 import {
-    KeyboardAvoidingView,
-    Platform,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
-// 1. Importamos Stack para poder ocultar el header feo desde aquí
-import { router, Stack } from "expo-router";
 import { COLORS } from "../../constants/theme";
-// 2. Importamos el componente de Calendario
+// Componente de calendario
 import DateTimePicker from "@react-native-community/datetimepicker";
 
 export default function NewSaleScreen() {
@@ -24,7 +23,7 @@ export default function NewSaleScreen() {
   const [quantity, setQuantity] = useState("1");
   const [total, setTotal] = useState("150.00");
 
-  // --- LÓGICA DEL CALENDARIO ---
+  // LÓGICA DEL CALENDARIO
   // Inicializa automáticamente con la fecha y hora de HOY
   const [date, setDate] = useState(new Date());
   const [showPicker, setShowPicker] = useState(false);
@@ -36,7 +35,7 @@ export default function NewSaleScreen() {
     setDate(currentDate);
   };
 
-  // Le damos formato visual (ej. 16/04/2026) para que tu papá lo vea claro
+  // formato visual  (16/04/2026)
   const formattedDate = date.toLocaleDateString("es-ES", {
     day: "2-digit",
     month: "2-digit",
@@ -55,10 +54,10 @@ export default function NewSaleScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={styles.container}
     >
-      {/* MAGIA: Esto apaga el header predeterminado "sales/new-sales" */}
+      {/* Oculta el header de pantalla principal*/}
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* CABECERA CON BOTÓN VOLVER (La nuestra) */}
+      {/* Header y boton de regresar */}
       <View style={styles.header}>
         <View
           style={{
@@ -198,7 +197,7 @@ export default function NewSaleScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* COMPONENTE DEL CALENDARIO NATIVO (Oculto hasta que showPicker es true) */}
+        {/* COMPONENTE DEL CALENDARIO NATIVO */}
         {showPicker && (
           <DateTimePicker
             value={date}
@@ -244,7 +243,7 @@ export default function NewSaleScreen() {
     </KeyboardAvoidingView>
   );
 }
-
+//Estilos
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   header: {

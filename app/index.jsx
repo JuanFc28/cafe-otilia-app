@@ -15,8 +15,6 @@ import {
   View,
 } from "react-native";
 import { COLORS } from "../constants/theme";
-
-// IMPORTAMOS LAS FUNCIONES DESDE TU ARCHIVO CONTEXT
 import { useAuth } from "../context/AuthContext";
 
 export default function LoginScreen() {
@@ -153,7 +151,7 @@ export default function LoginScreen() {
   );
 }
 
-// ESTILOS SE QUEDAN IGUAL
+//Estilos
 const styles = StyleSheet.create({
   container: {
     flex: 1,

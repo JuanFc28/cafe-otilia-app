@@ -2,17 +2,17 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, Stack } from "expo-router";
 import { useState } from "react";
 import {
-    FlatList,
-    Linking,
-    Modal,
-    Platform,
-    Pressable,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  FlatList,
+  Linking,
+  Modal,
+  Platform,
+  Pressable,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { COLORS } from "../../constants/theme";
 
@@ -23,11 +23,11 @@ export default function ClientsScreen() {
   // Estado para controlar el Modal (Pop-up)
   const [selectedClient, setSelectedClient] = useState(null);
 
-  // Filtros como en tu PDF
+  // Filtros
   const filters = ["Todos", "A-Z", "Fecha", "Alerta"];
   const [activeFilter, setActiveFilter] = useState("Todos");
 
-  // Datos de prueba (Basados en tu PDF y Captura)
+  // Datos de prueba temporales
   const clientsData = [
     {
       id: "1",
@@ -97,7 +97,7 @@ export default function ClientsScreen() {
   const renderClientItem = ({ item }) => (
     <TouchableOpacity
       style={styles.clientCard}
-      onPress={() => setSelectedClient(item)} // ¡Abre el popup al tocar!
+      onPress={() => setSelectedClient(item)} // Abre el popup al tocar
     >
       <View style={styles.clientIconBox}>
         <Ionicons
@@ -122,10 +122,9 @@ export default function ClientsScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Oculta el header automático feo */}
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* CABECERA */}
+      {/* Header */}
       <View style={styles.header}>
         <View
           style={{
@@ -194,9 +193,7 @@ export default function ClientsScreen() {
         showsVerticalScrollIndicator={false}
       />
 
-      {/* ========================================= */}
       {/* POPUP / MODAL DE DETALLE DE CLIENTE */}
-      {/* ========================================= */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -208,7 +205,7 @@ export default function ClientsScreen() {
           style={styles.modalOverlay}
           onPress={() => setSelectedClient(null)}
         >
-          {/* Tarjeta del Pop-up (Detenemos la propagación para que no se cierre si tocamos la tarjeta) */}
+          {/* Tarjeta del Pop-up */}
           <Pressable
             style={styles.modalCard}
             onPress={(e) => e.stopPropagation()}
@@ -307,9 +304,9 @@ export default function ClientsScreen() {
     </View>
   );
 }
-
+//Estilos
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background }, // Color crema de fondo
+  container: { flex: 1, backgroundColor: COLORS.background },
   header: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: 15,
@@ -407,7 +404,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 10,
     right: 10,
-    zIndex: 10, // Asegura que se pueda tocar y quede por encima de todo
+    zIndex: 10,
     padding: 5,
   },
   modalHeader: {

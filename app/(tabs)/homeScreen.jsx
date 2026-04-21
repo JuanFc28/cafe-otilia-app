@@ -1,3 +1,4 @@
+import { useAuth } from "@/context/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React from "react";
@@ -14,12 +15,9 @@ import {
 import { COLORS } from "../../constants/theme";
 import { auth } from "../../firebase/config";
 
-// IMPORTAMOS LOGOUT DIRECTO DE TU CARPETA CONTEXT
-import { useAuth } from "@/context/AuthContext";
-
 export default function HomeScreen() {
   const userName = auth.currentUser?.displayName || "Juan";
-  const { logout } = useAuth(); // EXTRAEMOS LOGOUT
+  const { logout } = useAuth();
 
   const notifications = [
     { id: "1", name: "Juan Cruz", status: "hace 1 mes" },
@@ -37,8 +35,7 @@ export default function HomeScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              // IGUAL QUE EN IMPULSELAB: Solo ejecutamos logout.
-              // El _layout.jsx detectará el cambio y te sacará automáticamente.
+              // Logout y redireccion a _layout.jsx (loginpage)
               await logout();
               router.replace("/");
             } catch (error) {
@@ -57,6 +54,7 @@ export default function HomeScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {/*Header de Saludo*/}
         <View style={styles.curvedHeader}>
           <View
             style={{
@@ -64,12 +62,12 @@ export default function HomeScreen() {
             }}
           />
           <Text style={styles.greetingText}>¡Hola {userName}! 👋🏼</Text>
-
+          {/*Logout button*/}
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={28} color={COLORS.white} />
           </TouchableOpacity>
         </View>
-
+        {/*Boton Registrar venta */}
         <View style={styles.innerContainer}>
           <View style={styles.actionsContainer}>
             <TouchableOpacity
@@ -91,7 +89,7 @@ export default function HomeScreen() {
               </View>
               <Ionicons name="chevron-forward" size={24} color={COLORS.gray} />
             </TouchableOpacity>
-
+            {/*Boton Ver Clientes*/}
             <TouchableOpacity
               style={styles.actionCard}
               activeOpacity={0.7}
@@ -112,7 +110,7 @@ export default function HomeScreen() {
               <Ionicons name="chevron-forward" size={24} color={COLORS.gray} />
             </TouchableOpacity>
           </View>
-
+          {/*Seccion notificaciones*/}
           <View style={styles.notificationsHeader}>
             <Text style={styles.sectionTitle}>Notificaciones</Text>
           </View>
@@ -146,7 +144,7 @@ export default function HomeScreen() {
   );
 }
 
-// ESTILOS SE QUEDAN IGUAL
+// Estilos
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   scrollContent: { paddingBottom: 20 },

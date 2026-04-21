@@ -1,5 +1,4 @@
 import * as NavigationBar from "expo-navigation-bar";
-// 1. IMPORTAMOS router DIRECTAMENTE (Quitamos useRouter)
 import { Slot, router, useSegments } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Platform, View } from "react-native";

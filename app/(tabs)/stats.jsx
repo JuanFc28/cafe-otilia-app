@@ -1,24 +1,24 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
 import {
-    Platform,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { COLORS } from "../../constants/theme";
 
 export default function StatsScreen() {
-  // Estado para controlar qué filtro de tiempo está seleccionado
+  // Filtro de tiempo seleccionado
   const [activeFilter, setActiveFilter] = useState("Mes");
   const filters = ["Día", "Semana", "Mes", "Año"];
 
   return (
     <View style={styles.container}>
-      {/* CABECERA */}
+      {/* Header */}
       <View style={styles.header}>
         <View
           style={{
@@ -32,7 +32,7 @@ export default function StatsScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* FILTROS DE TIEMPO */}
+        {/* Filtros de tiempo */}
         <View style={styles.filtersContainer}>
           {filters.map((filter) => (
             <TouchableOpacity
@@ -57,7 +57,7 @@ export default function StatsScreen() {
 
         {/* TARJETAS DE RESUMEN */}
         <View style={styles.summaryContainer}>
-          {/* Tarjeta: Total de café vendido */}
+          {/* Tarjeta Total de café vendido */}
           <View style={styles.summaryCard}>
             <View
               style={[
@@ -73,7 +73,7 @@ export default function StatsScreen() {
             </View>
           </View>
 
-          {/* Tarjeta: Total dinero generado */}
+          {/* Tarjeta Total dinero generado */}
           <View style={styles.summaryCard}>
             <View
               style={[
@@ -95,7 +95,7 @@ export default function StatsScreen() {
           <Text style={styles.chartTitle}>Ventas Por Tipo de Café</Text>
 
           <View style={styles.chartContainer}>
-            {/* Eje Y (Números) */}
+            {/* Eje Y Números */}
             <View style={styles.yAxis}>
               <Text style={styles.axisText}>50</Text>
               <Text style={styles.axisText}>40</Text>
@@ -148,7 +148,7 @@ export default function StatsScreen() {
     </View>
   );
 }
-
+// Estilos
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
   yAxis: {
     justifyContent: "space-between",
     paddingRight: 10,
-    paddingBottom: 25, // Para alinear con las barras sin contar las etiquetas
+    paddingBottom: 25, // Alinear las barras
   },
   axisText: {
     color: COLORS.gray,

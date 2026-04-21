@@ -22,7 +22,7 @@ export default function TabLayout() {
         },
       }}
     >
-      {/* PANTALLA 1: HOME (index.jsx) */}
+      {/* PANTALLA homeScreen*/}
       <Tabs.Screen
         name="homeScreen"
         options={{
@@ -34,7 +34,7 @@ export default function TabLayout() {
         }}
       />
 
-      {/* PANTALLA 2: ESTADÍSTICAS */}
+      {/* PANTALLA stats */}
       <Tabs.Screen
         name="stats"
         options={{
@@ -46,7 +46,7 @@ export default function TabLayout() {
         }}
       />
 
-      {/* PANTALLA 3: INVENTARIO */}
+      {/* PANTALLA stock */}
       <Tabs.Screen
         name="stock"
         options={{

@@ -28,12 +28,13 @@ export const AuthProvider = ({ children }) => {
     return unsubscribe;
   }, []);
 
+  //funcion de Login
   const login = async (email, pass) => {
     const userCredential = await signInWithEmailAndPassword(auth, email, pass);
     setUser(userCredential.user);
     return userCredential;
   };
-
+  //Funcion de registro
   const register = async (email, pass, name) => {
     const userCredential = await createUserWithEmailAndPassword(
       auth,
@@ -44,13 +45,12 @@ export const AuthProvider = ({ children }) => {
     setUser(userCredential.user);
     return userCredential;
   };
-
+  //Funcion de logout
   const logout = async () => {
     try {
       await signOut(auth);
       setUser(null);
-      // Solo cerramos sesión en Firebase.
-      // El _layout.jsx detectará este cambio y hará la redirección por nosotros.
+      // Solo cerramos sesión en Firebase y redirecciona en automatico
     } catch (error) {
       console.error("Error al cerrar sesión:", error);
     }
