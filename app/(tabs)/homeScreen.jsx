@@ -63,7 +63,7 @@ export default function HomeScreen() {
               height: Platform.OS === "ios" ? 50 : StatusBar.currentHeight + 20,
             }}
           />
-          <Text style={styles.greetingText}>¡Hola {userName}! 👋</Text>
+          <Text style={styles.greetingText}>¡Hola {userName}! 👋🏼</Text>
 
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={28} color={COLORS.white} />

@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import {
@@ -99,7 +100,7 @@ export default function LoginScreen() {
           </View>
         )}
         <View style={styles.inputContainer}>
-          <Text style={styles.iconPlaceholder}>✉️</Text>
+          <Ionicons name="mail" size={24} color={COLORS.gray} />
           <TextInput
             style={styles.input}
             placeholder="Correo electrónico"
@@ -111,7 +112,7 @@ export default function LoginScreen() {
           />
         </View>
         <View style={styles.inputContainer}>
-          <Text style={styles.iconPlaceholder}>🔒</Text>
+          <Ionicons name="remove-circle" size={24} color={COLORS.gray} />
           <TextInput
             style={styles.input}
             placeholder="Contraseña"
