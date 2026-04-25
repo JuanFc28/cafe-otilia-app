@@ -15,12 +15,12 @@ import {
 } from "react-native";
 import { COLORS } from "../../constants/theme";
 import { useAuth } from "../../context/AuthContext";
-import { auth, db } from "../../firebase/config";
+import { db } from "../../firebase/config";
 
 export default function HomeScreen() {
   const { user, logout } = useAuth();
   const [notifications, setNotifications] = useState([]);
-  const userName = auth.currentUser?.displayName || "Dueño";
+  const userName = user?.displayName || user?.email?.split("@")[0] || "Dueño";
 
   // BUSCAR CLIENTES CON RECORDATORIOS PRÓXIMOS
   useEffect(() => {
