@@ -1,7 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
   Platform,
+  Pressable,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -11,195 +17,372 @@ import {
   View,
 } from "react-native";
 import { COLORS } from "../../constants/theme";
+import { useAuth } from "../../context/AuthContext";
+import { db } from "../../firebase/config";
 
 export default function StockScreen() {
+  const { user } = useAuth();
+
+  // ESTADO DEL INVENTARIO (Desde Firebase)
   const [stock, setStock] = useState({
-    grano: "3",
-    molido: "2",
-    expresso: "1",
+    grano: "0",
+    molido: "0",
+    expresso: "0",
   });
+  const [loading, setLoading] = useState(true);
 
-  // Función para manejar los botones de + y -
-  const updateStock = (type, delta) => {
-    setStock((prev) => {
-      // Convertimos el texto a número decimal. Si está vacío, usamos 0.
-      const currentValue = parseFloat(prev[type]) || 0;
-      // Sumamos o restamos, evitando que baje de 0
-      let newValue = Math.max(0, currentValue + delta);
+  // ESTADOS DEL MODAL DE GESTIÓN
+  const [isModalVisible, setModalVisible] = useState(false);
+  const [selectedType, setSelectedType] = useState("grano"); // grano, molido, expresso
+  const [actionType, setActionType] = useState("add"); // add o subtract
+  const [amountToChange, setAmountToChange] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-      return {
-        ...prev,
-        [type]: newValue.toString(), // Lo devolvemos a texto
-      };
+  // Opciones de café para la UI
+  const coffeeTypes = [
+    { id: "grano", name: "Grano", icon: "leaf" },
+    { id: "molido", name: "Molido", icon: "cafe" },
+    { id: "expresso", name: "Expresso", icon: "color-fill" },
+  ];
+
+  // ESCUCHAR EL INVENTARIO EN FIREBASE EN TIEMPO REAL
+  useEffect(() => {
+    if (!user) return;
+
+    const stockRef = doc(db, "stock", user.uid);
+
+    const unsubscribe = onSnapshot(stockRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setStock(docSnap.data());
+      } else {
+        // Si el usuario es nuevo y no tiene stock, le creamos su documento en 0
+        setDoc(stockRef, { grano: "0", molido: "0", expresso: "0" });
+      }
+      setLoading(false);
     });
-  };
 
-  // Función para escribir con el teclado
-  const handleInputChange = (type, text) => {
-    // Expresión regular: Solo permite números y UN punto decimal
-    const sanitizedText = text.replace(/[^0-9.]/g, "");
-    setStock((prev) => ({
-      ...prev,
-      [type]: sanitizedText,
-    }));
+    return () => unsubscribe();
+  }, [user]);
+
+  // FUNCIÓN PARA GUARDAR EN FIREBASE (AL CONFIRMAR EL MODAL)
+  const handleConfirmStock = async () => {
+    if (!amountToChange || parseFloat(amountToChange) <= 0) {
+      Alert.alert("Atención", "Ingresa una cantidad válida mayor a 0.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const currentAmount = parseFloat(stock[selectedType]) || 0;
+      const changeAmount = parseFloat(amountToChange);
+
+      let newAmount =
+        actionType === "add"
+          ? currentAmount + changeAmount
+          : currentAmount - changeAmount;
+
+      // Evitamos que el stock quede en números negativos
+      if (newAmount < 0) newAmount = 0;
+
+      const stockRef = doc(db, "stock", user.uid);
+      await setDoc(stockRef, {
+        ...stock,
+        [selectedType]: newAmount.toString(), // Guardamos en Firebase el nuevo total
+      });
+
+      // Limpiamos y cerramos modal
+      setAmountToChange("");
+      setModalVisible(false);
+      Alert.alert("Éxito", "Inventario actualizado correctamente.");
+    } catch (error) {
+      console.error(error);
+      Alert.alert("Error", "No se pudo actualizar el inventario.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <View style={styles.container}>
-      {/*Header*/}
+      {/* HEADER CURVO */}
       <View style={styles.header}>
         <View
           style={{
             height: Platform.OS === "ios" ? 50 : StatusBar.currentHeight + 20,
           }}
         />
-        <Text style={styles.title}>Stock de café</Text>
+        <Text style={styles.title}>Inventario de Café</Text>
       </View>
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.itemsContainer}>
-          {/* Café en Grano */}
-          <View style={styles.stockCard}>
-            <View style={styles.cardInfo}>
-              <View style={[styles.iconBox, { backgroundColor: "#EFEBE9" }]}>
-                <Ionicons name="leaf" size={24} color={COLORS.primary} />
-              </View>
-              <View>
-                <Text style={styles.productName}>Café en grano</Text>
-                {/* Mostramos el peso actual arriba para referencia */}
-                <Text style={styles.productWeight}>
-                  {stock.grano || "0"} kg
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.stepper}>
-              <TouchableOpacity
-                style={styles.stepButton}
-                onPress={() => updateStock("grano", -1)}
-              >
-                <Ionicons name="remove" size={28} color={COLORS.primary} />
-              </TouchableOpacity>
-
-              <View style={styles.countBox}>
-                <TextInput
-                  style={styles.countInput}
-                  keyboardType="decimal-pad"
-                  value={stock.grano}
-                  onChangeText={(text) => handleInputChange("grano", text)}
-                  selectTextOnFocus={true}
-                />
-              </View>
-
-              <TouchableOpacity
-                style={styles.stepButton}
-                onPress={() => updateStock("grano", 1)}
-              >
-                <Ionicons name="add" size={28} color={COLORS.primary} />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Café Molido */}
-          <View style={styles.stockCard}>
-            <View style={styles.cardInfo}>
-              <View style={[styles.iconBox, { backgroundColor: "#EFEBE9" }]}>
-                <Ionicons name="cafe" size={24} color={COLORS.primary} />
-              </View>
-              <View>
-                <Text style={styles.productName}>Café molido</Text>
-                <Text style={styles.productWeight}>
-                  {stock.molido || "0"} kg
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.stepper}>
-              <TouchableOpacity
-                style={styles.stepButton}
-                onPress={() => updateStock("molido", -1)}
-              >
-                <Ionicons name="remove" size={28} color={COLORS.primary} />
-              </TouchableOpacity>
-
-              <View style={styles.countBox}>
-                <TextInput
-                  style={styles.countInput}
-                  keyboardType="decimal-pad"
-                  value={stock.molido}
-                  onChangeText={(text) => handleInputChange("molido", text)}
-                  selectTextOnFocus={true}
-                />
-              </View>
-
-              <TouchableOpacity
-                style={styles.stepButton}
-                onPress={() => updateStock("molido", 1)}
-              >
-                <Ionicons name="add" size={28} color={COLORS.primary} />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Café Expresso */}
-          <View style={styles.stockCard}>
-            <View style={styles.cardInfo}>
-              <View style={[styles.iconBox, { backgroundColor: "#EFEBE9" }]}>
-                <Ionicons name="color-fill" size={24} color={COLORS.primary} />
-              </View>
-              <View>
-                <Text style={styles.productName}>Café expresso</Text>
-                <Text style={styles.productWeight}>
-                  {stock.expresso || "0"} kg
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.stepper}>
-              <TouchableOpacity
-                style={styles.stepButton}
-                onPress={() => updateStock("expresso", -1)}
-              >
-                <Ionicons name="remove" size={28} color={COLORS.primary} />
-              </TouchableOpacity>
-
-              <View style={styles.countBox}>
-                <TextInput
-                  style={styles.countInput}
-                  keyboardType="decimal-pad"
-                  value={stock.expresso}
-                  onChangeText={(text) => handleInputChange("expresso", text)}
-                  selectTextOnFocus={true}
-                />
-              </View>
-
-              <TouchableOpacity
-                style={styles.stepButton}
-                onPress={() => updateStock("expresso", 1)}
-              >
-                <Ionicons name="add" size={28} color={COLORS.primary} />
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-
-        <TouchableOpacity style={styles.orderButton}>
-          <Ionicons
-            name="mail"
-            size={24}
-            color={COLORS.white}
-            style={{ marginRight: 10 }}
+        {loading ? (
+          <ActivityIndicator
+            size="large"
+            color={COLORS.primary}
+            style={{ marginTop: 50 }}
           />
-          <Text style={styles.orderButtonText}>Hacer Pedido</Text>
-        </TouchableOpacity>
+        ) : (
+          <>
+            {/* TABLA DE RESUMEN */}
+            <View style={styles.tableCard}>
+              <View style={styles.tableHeader}>
+                <Text style={styles.tableHeaderText}>Tipo de Café</Text>
+                <Text style={styles.tableHeaderText}>Cantidad (kg)</Text>
+              </View>
+
+              {coffeeTypes.map((coffee, index) => {
+                const currentWeight = parseFloat(stock[coffee.id]) || 0;
+                const isLowStock = currentWeight < 2.0; // Alerta si hay menos de 2kg
+
+                return (
+                  <View
+                    key={coffee.id}
+                    style={[
+                      styles.tableRow,
+                      index === coffeeTypes.length - 1 && {
+                        borderBottomWidth: 0,
+                      },
+                    ]}
+                  >
+                    <View style={styles.rowLeft}>
+                      <View
+                        style={[
+                          styles.iconBox,
+                          {
+                            backgroundColor: isLowStock ? "#FFF3E0" : "#EFEBE9",
+                          },
+                        ]}
+                      >
+                        <Ionicons
+                          name={coffee.icon}
+                          size={20}
+                          color={isLowStock ? COLORS.secondary : COLORS.primary}
+                        />
+                      </View>
+                      <View>
+                        <Text style={styles.rowName}>{coffee.name}</Text>
+                        {isLowStock && (
+                          <Text style={styles.lowStockText}>Stock Bajo</Text>
+                        )}
+                      </View>
+                    </View>
+
+                    <Text
+                      style={[
+                        styles.rowValue,
+                        isLowStock && { color: COLORS.secondary },
+                      ]}
+                    >
+                      {currentWeight} kg
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+
+            {/* BOTONES DE ACCIÓN */}
+            <View style={styles.actionButtonsContainer}>
+              <TouchableOpacity
+                style={styles.manageButton}
+                onPress={() => {
+                  setAmountToChange("");
+                  setModalVisible(true);
+                }}
+              >
+                <Ionicons
+                  name="create-outline"
+                  size={24}
+                  color={COLORS.primary}
+                  style={{ marginRight: 10 }}
+                />
+                <Text style={styles.manageButtonText}>
+                  Gestionar Inventario
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.orderButton}>
+                <Ionicons
+                  name="mail"
+                  size={24}
+                  color={COLORS.white}
+                  style={{ marginRight: 10 }}
+                />
+                <Text style={styles.orderButtonText}>Hacer Pedido</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
       </ScrollView>
+
+      {/* MODAL DE GESTIÓN DE INVENTARIO */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={isModalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <Pressable
+            style={styles.modalOverlay}
+            onPress={() => setModalVisible(false)}
+          >
+            <Pressable
+              style={styles.modalCard}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <TouchableOpacity
+                style={styles.closeModalButton}
+                onPress={() => setModalVisible(false)}
+              >
+                <Ionicons name="close" size={28} color={COLORS.gray} />
+              </TouchableOpacity>
+
+              <Text style={styles.modalTitle}>Ajustar Inventario</Text>
+
+              {/* SELECTOR DE CAFÉ */}
+              <Text style={styles.modalSubtitle}>1. Selecciona el tipo</Text>
+              <View style={styles.typeSelector}>
+                {coffeeTypes.map((coffee) => (
+                  <TouchableOpacity
+                    key={coffee.id}
+                    style={[
+                      styles.typePill,
+                      selectedType === coffee.id && styles.typePillActive,
+                    ]}
+                    onPress={() => setSelectedType(coffee.id)}
+                  >
+                    <Ionicons
+                      name={coffee.icon}
+                      size={18}
+                      color={
+                        selectedType === coffee.id ? COLORS.white : COLORS.gray
+                      }
+                    />
+                    <Text
+                      style={[
+                        styles.typePillText,
+                        selectedType === coffee.id && styles.typePillTextActive,
+                      ]}
+                    >
+                      {coffee.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* MOSTRAR STOCK ACTUAL (CONGELADO) */}
+              <View style={styles.currentStockBox}>
+                <Text style={{ color: COLORS.gray }}>
+                  Stock actual en base de datos:
+                </Text>
+                <Text style={styles.currentStockNumber}>
+                  {stock[selectedType] || 0} kg
+                </Text>
+              </View>
+
+              {/* AÑADIR O RETIRAR (TOGGLE) */}
+              <Text style={styles.modalSubtitle}>2. ¿Qué deseas hacer?</Text>
+              <View style={styles.actionSelector}>
+                <TouchableOpacity
+                  style={[
+                    styles.actionBtn,
+                    actionType === "add" && styles.actionBtnAdd,
+                  ]}
+                  onPress={() => setActionType("add")}
+                >
+                  <Ionicons
+                    name="add-circle-outline"
+                    size={20}
+                    color={actionType === "add" ? COLORS.white : COLORS.success}
+                  />
+                  <Text
+                    style={[
+                      styles.actionBtnText,
+                      {
+                        color:
+                          actionType === "add" ? COLORS.white : COLORS.success,
+                      },
+                    ]}
+                  >
+                    Añadir
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.actionBtn,
+                    actionType === "subtract" && styles.actionBtnSubtract,
+                  ]}
+                  onPress={() => setActionType("subtract")}
+                >
+                  <Ionicons
+                    name="remove-circle-outline"
+                    size={20}
+                    color={
+                      actionType === "subtract"
+                        ? COLORS.white
+                        : COLORS.secondary
+                    }
+                  />
+                  <Text
+                    style={[
+                      styles.actionBtnText,
+                      {
+                        color:
+                          actionType === "subtract"
+                            ? COLORS.white
+                            : COLORS.secondary,
+                      },
+                    ]}
+                  >
+                    Retirar
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* INPUT DE CANTIDAD */}
+              <View style={styles.inputWrapper}>
+                <Text style={styles.inputLabel}>Cantidad (kg):</Text>
+                <TextInput
+                  style={styles.amountInput}
+                  keyboardType="decimal-pad"
+                  placeholder="Ej. 1.5"
+                  value={amountToChange}
+                  onChangeText={(text) =>
+                    setAmountToChange(text.replace(/[^0-9.]/g, ""))
+                  }
+                />
+              </View>
+
+              {/* BOTÓN CONFIRMAR */}
+              <TouchableOpacity
+                style={styles.confirmButton}
+                onPress={handleConfirmStock}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator color={COLORS.white} />
+                ) : (
+                  <Text style={styles.confirmButtonText}>
+                    Confirmar Actualización
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
-//Estilos
+
+// ESTILOS
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   header: {
@@ -212,67 +395,67 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 24, fontWeight: "bold", color: COLORS.white },
   scrollContent: { padding: 20, paddingBottom: 40 },
-  itemsContainer: { gap: 15, marginBottom: 40 },
-  stockCard: {
+
+  // TABLA VISUAL
+  tableCard: {
     backgroundColor: COLORS.white,
-    borderRadius: 15,
+    borderRadius: 20,
     padding: 15,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    elevation: 4,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 3,
+    marginBottom: 30,
   },
-  cardInfo: { flexDirection: "row", alignItems: "center", flex: 1 },
+  tableHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    borderBottomWidth: 2,
+    borderBottomColor: "#F0F0F0",
+    paddingBottom: 10,
+    marginBottom: 10,
+  },
+  tableHeaderText: { color: COLORS.gray, fontWeight: "bold", fontSize: 14 },
+  tableRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F5F5F5",
+  },
+  rowLeft: { flexDirection: "row", alignItems: "center" },
   iconBox: {
-    width: 45,
-    height: 45,
+    width: 40,
+    height: 40,
     borderRadius: 10,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 15,
   },
-  productName: { fontSize: 16, fontWeight: "bold", color: COLORS.text },
-  productWeight: { fontSize: 14, color: COLORS.gray, marginTop: 2 },
-
-  // ▼▼ AQUI ES DONDE PUEDES EDITAR LOS TAMAÑOS ▼▼
-  stepper: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F5F5F5",
-    borderRadius: 12,
-    padding: 5,
+  rowName: { fontSize: 16, fontWeight: "bold", color: COLORS.text },
+  lowStockText: {
+    fontSize: 12,
+    color: COLORS.secondary,
+    fontWeight: "bold",
+    marginTop: 2,
   },
-  stepButton: {
-    width: 40,
-    height: 45,
+  rowValue: { fontSize: 18, fontWeight: "bold", color: COLORS.primary },
+
+  // BOTONES INFERIORES
+  actionButtonsContainer: { gap: 15 },
+  manageButton: {
+    backgroundColor: "transparent",
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+    flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: COLORS.white,
-    borderRadius: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
-    elevation: 1,
+    paddingVertical: 18,
+    borderRadius: 15,
   },
-  countBox: {
-    paddingHorizontal: 5,
-    minWidth: 55,
-    alignItems: "center",
-  },
-  countInput: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: COLORS.primary,
-    textAlign: "center",
-    width: "100%",
-    padding: 0,
-  },
-
+  manageButtonText: { color: COLORS.primary, fontSize: 18, fontWeight: "bold" },
   orderButton: {
     backgroundColor: COLORS.secondary,
     flexDirection: "row",
@@ -280,11 +463,136 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 18,
     borderRadius: 15,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 6,
+    elevation: 4,
   },
   orderButtonText: { color: COLORS.white, fontSize: 18, fontWeight: "bold" },
+
+  // MODAL STYLES
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  }, // Aparece desde abajo
+  modalCard: {
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    padding: 25,
+    paddingBottom: 40,
+    elevation: 10,
+  },
+  closeModalButton: {
+    position: "absolute",
+    top: 15,
+    right: 15,
+    zIndex: 10,
+    padding: 5,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: COLORS.primary,
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    fontWeight: "bold",
+    color: COLORS.gray,
+    marginBottom: 10,
+  },
+
+  typeSelector: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 20,
+  },
+  typePill: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F0F0F0",
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginHorizontal: 4,
+  },
+  typePillActive: { backgroundColor: COLORS.primary },
+  typePillText: {
+    marginLeft: 5,
+    fontSize: 12,
+    fontWeight: "bold",
+    color: COLORS.gray,
+  },
+  typePillTextActive: { color: COLORS.white },
+
+  currentStockBox: {
+    backgroundColor: "#F9F9F9",
+    padding: 15,
+    borderRadius: 12,
+    alignItems: "center",
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#EEE",
+  },
+  currentStockNumber: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: COLORS.primary,
+    marginTop: 5,
+  },
+
+  actionSelector: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 20,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 2,
+    marginHorizontal: 5,
+    borderColor: "#EEE",
+  },
+  actionBtnAdd: {
+    backgroundColor: COLORS.success,
+    borderColor: COLORS.success,
+  },
+  actionBtnSubtract: {
+    backgroundColor: COLORS.secondary,
+    borderColor: COLORS.secondary,
+  },
+  actionBtnText: { marginLeft: 5, fontWeight: "bold", fontSize: 16 },
+
+  inputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F5F5F5",
+    borderRadius: 15,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    marginBottom: 25,
+  },
+  inputLabel: { fontSize: 16, fontWeight: "bold", color: COLORS.text },
+  amountInput: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: COLORS.primary,
+    textAlign: "right",
+    minWidth: 100,
+  },
+
+  confirmButton: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 18,
+    borderRadius: 15,
+    alignItems: "center",
+    elevation: 2,
+  },
+  confirmButtonText: { color: COLORS.white, fontSize: 18, fontWeight: "bold" },
 });

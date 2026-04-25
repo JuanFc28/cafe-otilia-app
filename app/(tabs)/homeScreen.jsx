@@ -1,9 +1,10 @@
-import { useAuth } from "@/context/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React from "react";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
+  Linking,
   Platform,
   ScrollView,
   StatusBar,
@@ -13,39 +14,50 @@ import {
   View,
 } from "react-native";
 import { COLORS } from "../../constants/theme";
-import { auth } from "../../firebase/config";
+import { useAuth } from "../../context/AuthContext";
+import { auth, db } from "../../firebase/config";
 
 export default function HomeScreen() {
-  const userName = auth.currentUser?.displayName || "Juan";
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
+  const [notifications, setNotifications] = useState([]);
+  const userName = auth.currentUser?.displayName || "Dueño";
 
-  const notifications = [
-    { id: "1", name: "Juan Cruz", status: "hace 1 mes" },
-    { id: "2", name: "Juan Cruz", status: "hace 15 dias" },
-  ];
+  // BUSCAR CLIENTES CON RECORDATORIOS PRÓXIMOS
+  useEffect(() => {
+    if (!user) return;
+
+    // Filtramos clientes donde alertDays sea <= 15
+    const q = query(
+      collection(db, "clients"),
+      where("userId", "==", user.uid),
+      where("alertDays", "<=", 15),
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const activeAlerts = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setNotifications(activeAlerts);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  const openWhatsApp = (phone) => {
+    const url = `https://wa.me/52${phone}`;
+    Linking.openURL(url);
+  };
 
   const handleLogout = () => {
-    Alert.alert(
-      "Cerrar Sesión",
-      "¿Estás seguro que deseas salir de tu cuenta?",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Salir",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              // Logout y redireccion a _layout.jsx (loginpage)
-              await logout();
-              router.replace("/");
-            } catch (error) {
-              console.log("Error al salir:", error);
-              Alert.alert("Error", "No se pudo cerrar la sesión.");
-            }
-          },
-        },
-      ],
-    );
+    Alert.alert("Cerrar Sesión", "¿Seguro que quieres salir?", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Salir",
+        style: "destructive",
+        onPress: async () => await logout(),
+      },
+    ]);
   };
 
   return (
@@ -54,7 +66,6 @@ export default function HomeScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/*Header de Saludo*/}
         <View style={styles.curvedHeader}>
           <View
             style={{
@@ -62,17 +73,15 @@ export default function HomeScreen() {
             }}
           />
           <Text style={styles.greetingText}>¡Hola {userName}! 👋🏼</Text>
-          {/*Logout button*/}
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={28} color={COLORS.white} />
           </TouchableOpacity>
         </View>
-        {/*Boton Registrar venta */}
+
         <View style={styles.innerContainer}>
           <View style={styles.actionsContainer}>
             <TouchableOpacity
               style={styles.actionCard}
-              activeOpacity={0.7}
               onPress={() => router.push("/sales/new-sale")}
             >
               <View
@@ -89,10 +98,9 @@ export default function HomeScreen() {
               </View>
               <Ionicons name="chevron-forward" size={24} color={COLORS.gray} />
             </TouchableOpacity>
-            {/*Boton Ver Clientes*/}
+
             <TouchableOpacity
               style={styles.actionCard}
-              activeOpacity={0.7}
               onPress={() => router.push("/clients/clientsList")}
             >
               <View
@@ -110,41 +118,52 @@ export default function HomeScreen() {
               <Ionicons name="chevron-forward" size={24} color={COLORS.gray} />
             </TouchableOpacity>
           </View>
-          {/*Seccion notificaciones*/}
+
           <View style={styles.notificationsHeader}>
-            <Text style={styles.sectionTitle}>Notificaciones</Text>
+            <Text style={styles.sectionTitle}>Recordatorios Próximos</Text>
           </View>
-          {notifications.map((item) => (
-            <View key={item.id} style={styles.notificationItem}>
-              <View style={styles.notificationIcon}>
-                <Ionicons
-                  name="notifications"
-                  size={20}
-                  color={COLORS.secondary}
-                />
+
+          {notifications.length > 0 ? (
+            notifications.map((item) => (
+              <View key={item.id} style={styles.notificationItem}>
+                <View style={styles.notificationIcon}>
+                  <Ionicons
+                    name="notifications"
+                    size={20}
+                    color={COLORS.secondary}
+                  />
+                </View>
+                <View style={styles.notificationInfo}>
+                  <Text style={styles.customerName}>{item.name}</Text>
+                  <Text style={styles.lastPurchaseText}>
+                    Alerta en {item.alertDays} días
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.whatsappButton}
+                  onPress={() => openWhatsApp(item.phone)}
+                >
+                  <Ionicons
+                    name="logo-whatsapp"
+                    size={24}
+                    color={COLORS.success}
+                  />
+                </TouchableOpacity>
               </View>
-              <View style={styles.notificationInfo}>
-                <Text style={styles.customerName}>{item.name}</Text>
-                <Text style={styles.lastPurchaseText}>
-                  Ultima compra {item.status}
-                </Text>
-              </View>
-              <TouchableOpacity style={styles.whatsappButton}>
-                <Ionicons
-                  name="logo-whatsapp"
-                  size={24}
-                  color={COLORS.success}
-                />
-              </TouchableOpacity>
-            </View>
-          ))}
+            ))
+          ) : (
+            <Text
+              style={{ textAlign: "center", color: COLORS.gray, marginTop: 10 }}
+            >
+              No hay alertas pendientes.
+            </Text>
+          )}
         </View>
       </ScrollView>
     </View>
   );
 }
 
-// Estilos
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   scrollContent: { paddingBottom: 20 },
@@ -194,13 +213,12 @@ const styles = StyleSheet.create({
   notificationIcon: { marginRight: 15 },
   notificationInfo: { flex: 1 },
   customerName: { fontSize: 16, fontWeight: "bold", color: COLORS.text },
-  lastPurchaseText: { fontSize: 14, color: COLORS.gray, marginTop: 2 },
+  lastPurchaseText: { fontSize: 14, color: COLORS.gray },
   whatsappButton: { padding: 5 },
   logoutButton: {
     position: "absolute",
     top: Platform.OS === "ios" ? 50 : StatusBar.currentHeight + 20,
     right: 20,
     padding: 5,
-    zIndex: 10,
   },
 });

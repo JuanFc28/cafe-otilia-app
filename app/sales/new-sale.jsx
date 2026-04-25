@@ -1,7 +1,19 @@
 import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { router, Stack } from "expo-router";
-import { useState } from "react";
 import {
+  addDoc,
+  collection,
+  doc,
+  onSnapshot,
+  query,
+  updateDoc,
+  where,
+} from "firebase/firestore";
+import { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -13,35 +25,44 @@ import {
   View,
 } from "react-native";
 import { COLORS } from "../../constants/theme";
-// Componente de calendario
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { useAuth } from "../../context/AuthContext";
+import { db } from "../../firebase/config";
 
+//Definicion de constantes
 export default function NewSaleScreen() {
+  const { user } = useAuth();
+
   const [clientName, setClientName] = useState("");
   const [phone, setPhone] = useState("");
   const [coffeeType, setCoffeeType] = useState("Grano");
   const [quantity, setQuantity] = useState("1");
-  const [total, setTotal] = useState("150.00");
+  const [total, setTotal] = useState("320");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // LÓGICA DEL CALENDARIO
-  // Inicializa automáticamente con la fecha y hora de HOY
+  // ESTADOS PARA AUTOCOMPLETADO Y STOCK
+  const [clientsDb, setClientsDb] = useState([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [currentStock, setCurrentStock] = useState({
+    grano: "0",
+    molido: "0",
+    expresso: "0",
+  });
+
+  // CALENDARIO
   const [date, setDate] = useState(new Date());
   const [showPicker, setShowPicker] = useState(false);
 
   const onChangeDate = (event, selectedDate) => {
     const currentDate = selectedDate || date;
-    // En Android cerramos el calendario al elegir; en iOS lo maneja distinto
     setShowPicker(Platform.OS === "ios");
     setDate(currentDate);
   };
 
-  // formato visual  (16/04/2026)
   const formattedDate = date.toLocaleDateString("es-ES", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
   });
-  // ------------------------------
 
   const coffeeOptions = [
     { id: "Grano", icon: "leaf" },
@@ -49,15 +70,147 @@ export default function NewSaleScreen() {
     { id: "Expresso", icon: "color-fill" },
   ];
 
+  // CARGAR CLIENTES Y STOCK EN TIEMPO REAL
+  useEffect(() => {
+    if (!user) return;
+
+    // Traer clientes para el autocompletado
+    const qClients = query(
+      collection(db, "clients"),
+      where("userId", "==", user.uid),
+    );
+    const unsubClients = onSnapshot(qClients, (snapshot) => {
+      setClientsDb(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+    });
+
+    // Traer stock para la validación
+    const unsubStock = onSnapshot(doc(db, "stock", user.uid), (docSnap) => {
+      if (docSnap.exists()) setCurrentStock(docSnap.data());
+    });
+
+    return () => {
+      unsubClients();
+      unsubStock();
+    };
+  }, [user]);
+
+  // LÓGICA DE PRECIOS AUTOMÁTICOS
+  useEffect(() => {
+    const qty = parseFloat(quantity) || 0;
+    let calculatedPrice = 0;
+
+    const kilos = Math.floor(qty); // Kilos enteros
+    const remainder = qty - kilos; // Decimales (0.25, 0.50, 0.75)
+
+    calculatedPrice += kilos * 320;
+
+    if (remainder === 0.25) calculatedPrice += 85;
+    else if (remainder === 0.5) calculatedPrice += 165;
+    else if (remainder === 0.75)
+      calculatedPrice += 250; // 165 + 85
+    else calculatedPrice += remainder * 320; // Fallback por si se escribe "0.3" a mano
+
+    setTotal(calculatedPrice.toString());
+  }, [quantity]);
+
+  // FILTRO DE AUTOCOMPLETADO
+  const filteredClients = clientName
+    ? clientsDb.filter(
+        (c) =>
+          c.name.toLowerCase().includes(clientName.toLowerCase()) &&
+          c.name.toLowerCase() !== clientName.toLowerCase(), // Ocultar si ya escribió el nombre completo exacto
+      )
+    : [];
+
+  // REGISTRO DE VENTA Y DESCUENTO DE STOCK
+  const handleRegisterSale = async () => {
+    if (!clientName.trim() || !phone.trim() || !quantity || !total) {
+      Alert.alert("Error", "Por favor llena todos los campos.");
+      return;
+    }
+
+    // Validación de Inventario
+    const coffeeKey = coffeeType.toLowerCase();
+    const availableStock = parseFloat(currentStock[coffeeKey]) || 0;
+    const requestedQty = parseFloat(quantity) || 0;
+
+    if (availableStock < requestedQty) {
+      Alert.alert(
+        "Stock Insuficiente",
+        `Solo tienes ${availableStock} kg de café ${coffeeType}. No puedes vender ${requestedQty} kg.`,
+      );
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      // Guardar la Venta
+      const saleRef = await addDoc(collection(db, "sales"), {
+        userId: user.uid,
+        clientName,
+        phone,
+        coffeeType,
+        quantity: requestedQty,
+        total: parseFloat(total),
+        date: date.toISOString(),
+        formattedDate,
+        createdAt: new Date(),
+      });
+
+      // Lógica del Cliente (Buscar si existe o crear nuevo)
+      const existingClient = clientsDb.find((c) => c.phone === phone);
+      const purchaseHistory = {
+        id: saleRef.id,
+        date: formattedDate,
+        type: coffeeType,
+        weight: requestedQty,
+        price: total,
+      };
+
+      if (existingClient) {
+        const existingHistory = existingClient.history || [];
+        await updateDoc(doc(db, "clients", existingClient.id), {
+          name: clientName,
+          lastPurchase: formattedDate,
+          history: [purchaseHistory, ...existingHistory],
+        });
+      } else {
+        await addDoc(collection(db, "clients"), {
+          userId: user.uid,
+          name: clientName,
+          phone: phone,
+          lastPurchase: formattedDate,
+          alertDays: 30, // Recordatorio por defecto de 1 mes
+          history: [purchaseHistory],
+        });
+      }
+
+      // Descontar del Inventario (Stock)
+      await updateDoc(doc(db, "stock", user.uid), {
+        [coffeeKey]: (availableStock - requestedQty).toString(),
+      });
+
+      Alert.alert(
+        "Éxito",
+        "Venta registrada y stock actualizado correctamente.",
+        [{ text: "OK", onPress: () => router.back() }],
+      );
+    } catch (error) {
+      console.error("Error al registrar la venta:", error);
+      Alert.alert("Error", "Hubo un problema al guardar los datos.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={styles.container}
     >
-      {/* Oculta el header de pantalla principal*/}
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* Header y boton de regresar */}
       <View style={styles.header}>
         <View
           style={{
@@ -76,9 +229,12 @@ export default function NewSaleScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* CAMPO: NOMBRE DEL CLIENTE */}
-        <View style={styles.inputGroup}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* NOMBRE DEL CLIENTE (CON AUTOCOMPLETADO) */}
+        <View style={[styles.inputGroup, { zIndex: 10 }]}>
           <Text style={styles.label}>Nombre del Cliente</Text>
           <View style={styles.inputWrapper}>
             <Ionicons
@@ -89,14 +245,45 @@ export default function NewSaleScreen() {
             />
             <TextInput
               style={styles.input}
-              placeholder="Ej. Juan Pérez"
+              placeholder="Ej. Alejo Cruz"
               value={clientName}
-              onChangeText={setClientName}
+              onChangeText={(text) => {
+                setClientName(text);
+                setShowDropdown(true);
+              }}
+              onFocus={() => setShowDropdown(true)}
             />
           </View>
+
+          {/* LISTA DESPLEGABLE DE CLIENTES */}
+          {showDropdown && filteredClients.length > 0 && (
+            <View style={styles.dropdownContainer}>
+              {filteredClients.map((client) => (
+                <TouchableOpacity
+                  key={client.id}
+                  style={styles.dropdownItem}
+                  onPress={() => {
+                    setClientName(client.name);
+                    setPhone(client.phone);
+                    setShowDropdown(false);
+                  }}
+                >
+                  <Ionicons
+                    name="person-circle"
+                    size={24}
+                    color={COLORS.primary}
+                    style={{ marginRight: 10 }}
+                  />
+                  <View>
+                    <Text style={styles.dropdownName}>{client.name}</Text>
+                    <Text style={styles.dropdownPhone}>{client.phone}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
 
-        {/* CAMPO: TELÉFONO */}
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Teléfono de Contacto</Text>
           <View style={styles.inputWrapper}>
@@ -108,15 +295,15 @@ export default function NewSaleScreen() {
             />
             <TextInput
               style={styles.input}
-              placeholder="55 1234 5678"
+              placeholder="Ej. 2222064814"
               keyboardType="phone-pad"
+              maxLength={10}
               value={phone}
               onChangeText={setPhone}
             />
           </View>
         </View>
 
-        {/* SELECCIÓN: TIPO DE CAFÉ */}
         <Text style={styles.label}>Tipo de Café</Text>
         <View style={styles.coffeeToggleContainer}>
           {coffeeOptions.map((option) => (
@@ -145,7 +332,6 @@ export default function NewSaleScreen() {
           ))}
         </View>
 
-        {/* CAMPO: CANTIDAD (KG) */}
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Cantidad (Kg)</Text>
           <View style={styles.stepperContainer}>
@@ -159,14 +345,12 @@ export default function NewSaleScreen() {
             >
               <Ionicons name="remove" size={30} color={COLORS.primary} />
             </TouchableOpacity>
-
             <TextInput
               style={styles.stepperInput}
               keyboardType="decimal-pad"
               value={quantity}
               onChangeText={setQuantity}
             />
-
             <TouchableOpacity
               style={styles.stepperButton}
               onPress={() =>
@@ -178,10 +362,8 @@ export default function NewSaleScreen() {
           </View>
         </View>
 
-        {/* CAMPO: FECHA INTERACTIVA */}
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Fecha de Venta</Text>
-          {/* Cambiamos el TextInput por un TouchableOpacity que abre el calendario */}
           <TouchableOpacity
             style={styles.inputWrapper}
             onPress={() => setShowPicker(true)}
@@ -192,12 +374,10 @@ export default function NewSaleScreen() {
               color={COLORS.gray}
               style={styles.inputIcon}
             />
-            {/* Mostramos la fecha formateada */}
             <Text style={styles.inputText}>{formattedDate}</Text>
           </TouchableOpacity>
         </View>
 
-        {/* COMPONENTE DEL CALENDARIO NATIVO */}
         {showPicker && (
           <DateTimePicker
             value={date}
@@ -207,7 +387,6 @@ export default function NewSaleScreen() {
           />
         )}
 
-        {/* CAMPO: MONTO TOTAL */}
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Monto Total ($)</Text>
           <View
@@ -229,21 +408,31 @@ export default function NewSaleScreen() {
           </View>
         </View>
 
-        {/* BOTÓN REGISTRAR */}
-        <TouchableOpacity style={styles.submitButton}>
-          <Ionicons
-            name="checkmark-circle"
-            size={24}
-            color={COLORS.white}
-            style={{ marginRight: 10 }}
-          />
-          <Text style={styles.submitButtonText}>Registrar Venta</Text>
+        <TouchableOpacity
+          style={styles.submitButton}
+          onPress={handleRegisterSale}
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? (
+            <ActivityIndicator color={COLORS.white} />
+          ) : (
+            <>
+              <Ionicons
+                name="checkmark-circle"
+                size={24}
+                color={COLORS.white}
+                style={{ marginRight: 10 }}
+              />
+              <Text style={styles.submitButtonText}>Registrar Venta</Text>
+            </>
+          )}
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
-//Estilos
+
+// ESTILOS
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   header: {
@@ -259,6 +448,7 @@ const styles = StyleSheet.create({
   headerTitle: { color: COLORS.white, fontSize: 20, fontWeight: "bold" },
   backButton: { padding: 5 },
   scrollContent: { padding: 20, paddingBottom: 50 },
+
   inputGroup: { marginBottom: 20 },
   label: {
     fontSize: 16,
@@ -278,7 +468,33 @@ const styles = StyleSheet.create({
   },
   inputIcon: { marginRight: 10 },
   input: { flex: 1, fontSize: 16, color: COLORS.text },
-  inputText: { flex: 1, fontSize: 16, color: COLORS.text }, // Estilo para el texto de la fecha
+  inputText: { flex: 1, fontSize: 16, color: COLORS.text },
+
+  // ESTILOS DEL AUTOCOMPLETADO
+  dropdownContainer: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#DDD",
+    marginTop: 5,
+    maxHeight: 150,
+    overflow: "hidden",
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    shadowOffset: { height: 2, width: 0 },
+  },
+  dropdownItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EEE",
+  },
+  dropdownName: { fontSize: 16, fontWeight: "bold", color: COLORS.text },
+  dropdownPhone: { fontSize: 12, color: COLORS.gray },
+
   coffeeToggleContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -305,6 +521,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   coffeeOptionTextActive: { color: COLORS.white },
+
   stepperContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -328,6 +545,7 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     padding: 0,
   },
+
   currencyPrefix: {
     fontSize: 18,
     fontWeight: "bold",

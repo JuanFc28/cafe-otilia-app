@@ -1,12 +1,25 @@
 import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { router, Stack } from "expo-router";
-import { useState } from "react";
 import {
+  collection,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  query,
+  updateDoc,
+  where,
+} from "firebase/firestore";
+import { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
   FlatList,
   Linking,
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
@@ -15,89 +28,134 @@ import {
   View,
 } from "react-native";
 import { COLORS } from "../../constants/theme";
+import { useAuth } from "../../context/AuthContext";
+import { db } from "../../firebase/config";
 
 export default function ClientsScreen() {
-  // Estado para buscar clientes
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
-
-  // Estado para controlar el Modal (Pop-up)
   const [selectedClient, setSelectedClient] = useState(null);
 
-  // Filtros
   const filters = ["Todos", "A-Z", "Fecha", "Alerta"];
   const [activeFilter, setActiveFilter] = useState("Todos");
 
-  // Datos de prueba temporales
-  const clientsData = [
-    {
-      id: "1",
-      name: "Juan Cruz",
-      phone: "2227795715",
-      lastPurchase: "04/15/2026",
-      alertDays: 15,
-      history: [
-        {
-          id: "h1",
-          date: "02/02/2026",
-          type: "Grano",
-          weight: "0.5",
-          price: "165",
-        },
-        {
-          id: "h2",
-          date: "21/02/2026",
-          type: "Molido",
-          weight: "0.5",
-          price: "165",
-        },
-        {
-          id: "h3",
-          date: "02/03/2026",
-          type: "Expresso",
-          weight: "1.00",
-          price: "320",
-        },
-        {
-          id: "h4",
-          date: "02/02/2026",
-          type: "Grano",
-          weight: "0.5",
-          price: "165",
-        },
-      ],
-    },
-    {
-      id: "2",
-      name: "María López",
-      phone: "5512345678",
-      lastPurchase: "04/10/2026",
-      alertDays: 5,
-      history: [],
-    },
-    {
-      id: "3",
-      name: "Carlos Ruíz",
-      phone: "5587654321",
-      lastPurchase: "03/25/2026",
-      alertDays: 0,
-      history: [],
-    },
-  ];
+  const [clients, setClients] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Función para abrir WhatsApp
-  const openWhatsApp = (phone) => {
-    // Usamos wa.me para que abra la app o el navegador si no está instalada
-    const url = `https://wa.me/52${phone}`;
-    Linking.openURL(url).catch(() => {
-      alert("Asegúrate de tener WhatsApp instalado");
+  const [reminderModalVisible, setReminderModalVisible] = useState(false);
+  const [reminderDate, setReminderDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [isUpdatingReminder, setIsUpdatingReminder] = useState(false);
+  const [activeQuickDate, setActiveQuickDate] = useState(null);
+
+  useEffect(() => {
+    if (!user) return;
+    const q = query(collection(db, "clients"), where("userId", "==", user.uid));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const docs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      setClients(docs);
+      setLoading(false);
     });
+    return () => unsubscribe();
+  }, [user]);
+
+  // FUNCIÓN WHATSAPP CON MENSAJE PRECARGADO
+  const openWhatsApp = (phone, name) => {
+    const message = `¡Hola ${name}! 👋🏼 Le escribo de Café Otilia. ¿Qué tal le pareció su último café? ☕ Esperamos que lo esté disfrutando mucho. ¿Le gustaría que le agendemos un nuevo pedido?`;
+    const url = `https://wa.me/52${phone}?text=${encodeURIComponent(message)}`;
+    Linking.openURL(url).catch(() =>
+      alert("Asegúrate de tener WhatsApp instalado"),
+    );
   };
 
-  // Renderiza cada tarjeta de cliente en la lista
+  // FUNCIÓN PARA ELIMINAR CLIENTE
+  const handleDeleteClient = (clientId, clientName) => {
+    Alert.alert(
+      "Eliminar Cliente",
+      `¿Estás seguro de que deseas eliminar a ${clientName}? Esta acción borrará todo su historial y no se puede deshacer.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteDoc(doc(db, "clients", clientId));
+              setSelectedClient(null);
+              Alert.alert("Éxito", "Cliente eliminado correctamente.");
+            } catch (error) {
+              console.error(error);
+              Alert.alert("Error", "No se pudo eliminar el cliente.");
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const setQuickDate = (days) => {
+    const newDate = new Date();
+    newDate.setDate(newDate.getDate() + days);
+    setReminderDate(newDate);
+    setActiveQuickDate(days);
+  };
+
+  const onChangeDate = (event, selectedDate) => {
+    const currentDate = selectedDate || reminderDate;
+    setShowDatePicker(Platform.OS === "ios");
+    setReminderDate(currentDate);
+    setActiveQuickDate(null);
+  };
+
+  const handleSaveReminder = async () => {
+    if (!selectedClient) return;
+    setIsUpdatingReminder(true);
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const target = new Date(reminderDate);
+      target.setHours(0, 0, 0, 0);
+
+      const diffTime = target - today;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      const finalDays = diffDays >= 0 ? diffDays : 0;
+
+      await updateDoc(doc(db, "clients", selectedClient.id), {
+        alertDays: finalDays,
+      });
+
+      setSelectedClient({ ...selectedClient, alertDays: finalDays });
+      setReminderModalVisible(false);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsUpdatingReminder(false);
+    }
+  };
+
+  const filteredClients = clients
+    .filter((c) => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort((a, b) => {
+      if (activeFilter === "A-Z") return a.name.localeCompare(b.name);
+      if (activeFilter === "Alerta")
+        return (a.alertDays || 0) - (b.alertDays || 0);
+      if (activeFilter === "Fecha") {
+        const parseDate = (dateStr) => {
+          if (!dateStr) return 0;
+          const parts = dateStr.split("/");
+          return parts.length === 3
+            ? new Date(parts[2], parts[1] - 1, parts[0]).getTime()
+            : 0;
+        };
+        return parseDate(b.lastPurchase) - parseDate(a.lastPurchase);
+      }
+      return 0;
+    });
+
   const renderClientItem = ({ item }) => (
     <TouchableOpacity
       style={styles.clientCard}
-      onPress={() => setSelectedClient(item)} // Abre el popup al tocar
+      onPress={() => setSelectedClient(item)}
     >
       <View style={styles.clientIconBox}>
         <Ionicons
@@ -113,10 +171,16 @@ export default function ClientsScreen() {
           <Text style={styles.clientPhone}>{item.phone}</Text>
         </View>
         <Text style={styles.lastPurchase}>
-          Ultima compra: {item.lastPurchase}
+          Última compra: {item.lastPurchase}
         </Text>
       </View>
-      <Ionicons name="chevron-forward" size={24} color={COLORS.gray} />
+
+      <View style={styles.rightActionContainer}>
+        <View style={styles.listAlertBadgeRight}>
+          <Text style={styles.listAlertBadgeText}>{item.alertDays} d</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={24} color={COLORS.gray} />
+      </View>
     </TouchableOpacity>
   );
 
@@ -124,7 +188,6 @@ export default function ClientsScreen() {
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* Header */}
       <View style={styles.header}>
         <View
           style={{
@@ -138,12 +201,11 @@ export default function ClientsScreen() {
           >
             <Ionicons name="arrow-back" size={28} color={COLORS.white} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Clientes</Text>
+          <Text style={styles.headerTitle}>Mis Clientes</Text>
           <View style={{ width: 40 }} />
         </View>
       </View>
 
-      {/* BUSCADOR Y FILTROS */}
       <View style={styles.searchSection}>
         <Text style={styles.searchLabel}>Buscador de Clientes</Text>
         <View style={styles.searchBox}>
@@ -160,52 +222,60 @@ export default function ClientsScreen() {
             onChangeText={setSearchQuery}
           />
         </View>
-
         <View style={styles.filtersContainer}>
-          {filters.map((filter) => (
+          {filters.map((f) => (
             <TouchableOpacity
-              key={filter}
+              key={f}
               style={[
                 styles.filterPill,
-                activeFilter === filter && styles.filterPillActive,
+                activeFilter === f && styles.filterPillActive,
               ]}
-              onPress={() => setActiveFilter(filter)}
+              onPress={() => setActiveFilter(f)}
             >
               <Text
                 style={[
                   styles.filterText,
-                  activeFilter === filter && styles.filterTextActive,
+                  activeFilter === f && styles.filterTextActive,
                 ]}
               >
-                {filter}
+                {f}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
       </View>
 
-      {/* LISTA DE CLIENTES */}
-      <FlatList
-        data={clientsData}
-        keyExtractor={(item) => item.id}
-        renderItem={renderClientItem}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-      />
+      {loading ? (
+        <ActivityIndicator
+          size="large"
+          color={COLORS.primary}
+          style={{ marginTop: 50 }}
+        />
+      ) : (
+        <FlatList
+          data={filteredClients}
+          keyExtractor={(item) => item.id}
+          renderItem={renderClientItem}
+          contentContainerStyle={styles.listContent}
+          ListEmptyComponent={
+            <Text style={{ textAlign: "center", color: COLORS.gray }}>
+              Sin resultados.
+            </Text>
+          }
+        />
+      )}
 
-      {/* POPUP / MODAL DE DETALLE DE CLIENTE */}
+      {/* MODAL DETALLE */}
       <Modal
         animationType="fade"
         transparent={true}
         visible={selectedClient !== null}
-        onRequestClose={() => setSelectedClient(null)} // Botón atrás en Android
+        onRequestClose={() => setSelectedClient(null)}
       >
-        {/* Fondo oscuro transparente. Al tocarlo se cierra el modal */}
         <Pressable
           style={styles.modalOverlay}
           onPress={() => setSelectedClient(null)}
         >
-          {/* Tarjeta del Pop-up */}
           <Pressable
             style={styles.modalCard}
             onPress={(e) => e.stopPropagation()}
@@ -217,7 +287,6 @@ export default function ClientsScreen() {
               <Ionicons name="close" size={28} color={COLORS.gray} />
             </TouchableOpacity>
 
-            {/* Cabecera del Modal (Foto, Nombre, Alerta) */}
             <View style={styles.modalHeader}>
               <View style={styles.modalHeaderLeft}>
                 <Ionicons
@@ -237,66 +306,189 @@ export default function ClientsScreen() {
                   </View>
                 </View>
               </View>
-
-              {/* Etiqueta de Alerta Naranja */}
               <View style={styles.alertBadge}>
                 <Text style={styles.alertBadgeText}>
-                  Alerta en {selectedClient?.alertDays} dias
+                  Alerta en {selectedClient?.alertDays} días
                 </Text>
               </View>
             </View>
 
-            {/* Historial de Compras */}
             <View style={styles.historyContainer}>
               <Text style={styles.historyTitle}>Historial de Compras</Text>
-              <View style={styles.historyList}>
-                {selectedClient?.history.map((item, index) => (
-                  <View key={item.id} style={styles.historyItem}>
+              <ScrollView
+                style={{
+                  maxHeight: 180,
+                  borderTopWidth: 1,
+                  borderTopColor: "#EEE",
+                }}
+              >
+                {selectedClient?.history?.map((h, i) => (
+                  <View key={i} style={styles.historyItem}>
                     <Text style={styles.historyText}>
-                      [1] {item.date} - {item.type}
+                      {h.date} - {h.type}
                     </Text>
-                    <Text style={styles.historyWeight}>{item.weight} kg</Text>
-                    <Text style={styles.historyPrice}>${item.price}</Text>
+                    <Text style={styles.historyWeight}>{h.weight} kg</Text>
+                    <Text style={styles.historyPrice}>${h.price}</Text>
                   </View>
                 ))}
-                {selectedClient?.history.length === 0 && (
-                  <Text
-                    style={{
-                      textAlign: "center",
-                      color: COLORS.gray,
-                      padding: 10,
-                    }}
-                  >
-                    Sin compras recientes
-                  </Text>
-                )}
-              </View>
+              </ScrollView>
             </View>
 
-            {/* Botones de Acción */}
-            <TouchableOpacity style={styles.reminderButton}>
+            <View style={{ gap: 10 }}>
+              <TouchableOpacity
+                style={styles.reminderButton}
+                onPress={() => setReminderModalVisible(true)}
+              >
+                <Ionicons
+                  name="notifications"
+                  size={24}
+                  color={COLORS.white}
+                  style={{ marginRight: 10 }}
+                />
+                <Text style={styles.actionButtonText}>
+                  Establecer Recordatorio
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.whatsappButton}
+                onPress={() =>
+                  openWhatsApp(selectedClient?.phone, selectedClient?.name)
+                }
+              >
+                <Ionicons
+                  name="logo-whatsapp"
+                  size={24}
+                  color={COLORS.white}
+                  style={{ marginRight: 10 }}
+                />
+                <Text style={styles.actionButtonText}>Enviar WhatsApp</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.deleteButton}
+                onPress={() =>
+                  handleDeleteClient(selectedClient?.id, selectedClient?.name)
+                }
+              >
+                <Ionicons
+                  name="trash"
+                  size={20}
+                  color={COLORS.secondary}
+                  style={{ marginRight: 8 }}
+                />
+                <Text style={styles.deleteButtonText}>Eliminar Cliente</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* MODAL RECORDATORIO */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={reminderModalVisible}
+        onRequestClose={() => setReminderModalVisible(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setReminderModalVisible(false)}
+        >
+          <Pressable
+            style={styles.modalCard}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Text style={styles.modalClientName}>Nuevo Recordatorio</Text>
+            <View style={styles.quickDatesContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.quickDateButton,
+                  activeQuickDate === 7 && styles.quickDateButtonActive,
+                ]}
+                onPress={() => setQuickDate(7)}
+              >
+                <Text
+                  style={[
+                    styles.quickDateText,
+                    activeQuickDate === 7 && styles.quickDateTextActive,
+                  ]}
+                >
+                  1 Sem
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.quickDateButton,
+                  activeQuickDate === 15 && styles.quickDateButtonActive,
+                ]}
+                onPress={() => setQuickDate(15)}
+              >
+                <Text
+                  style={[
+                    styles.quickDateText,
+                    activeQuickDate === 15 && styles.quickDateTextActive,
+                  ]}
+                >
+                  15 Días
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.quickDateButton,
+                  activeQuickDate === 30 && styles.quickDateButtonActive,
+                ]}
+                onPress={() => setQuickDate(30)}
+              >
+                <Text
+                  style={[
+                    styles.quickDateText,
+                    activeQuickDate === 30 && styles.quickDateTextActive,
+                  ]}
+                >
+                  1 Mes
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.datePickerButton}
+              onPress={() => setShowDatePicker(true)}
+            >
               <Ionicons
-                name="notifications"
-                size={24}
-                color={COLORS.white}
+                name="calendar"
+                size={20}
+                color={COLORS.primary}
                 style={{ marginRight: 10 }}
               />
-              <Text style={styles.actionButtonText}>
-                Establecer Recordatorio
+              <Text>
+                {reminderDate.toLocaleDateString("es-ES", {
+                  day: "2-digit",
+                  month: "long",
+                })}
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.whatsappButton}
-              onPress={() => openWhatsApp(selectedClient?.phone)}
-            >
-              <Ionicons
-                name="logo-whatsapp"
-                size={24}
-                color={COLORS.white}
-                style={{ marginRight: 10 }}
+            {showDatePicker && (
+              <DateTimePicker
+                value={reminderDate}
+                mode="date"
+                display="default"
+                minimumDate={new Date()}
+                onChange={onChangeDate}
               />
-              <Text style={styles.actionButtonText}>Enviar WhatsApp</Text>
+            )}
+
+            <TouchableOpacity
+              style={[styles.whatsappButton, { marginTop: 20 }]}
+              onPress={handleSaveReminder}
+              disabled={isUpdatingReminder}
+            >
+              {isUpdatingReminder ? (
+                <ActivityIndicator color={COLORS.white} />
+              ) : (
+                <Text style={styles.actionButtonText}>Confirmar</Text>
+              )}
             </TouchableOpacity>
           </Pressable>
         </Pressable>
@@ -304,7 +496,7 @@ export default function ClientsScreen() {
     </View>
   );
 }
-//Estilos
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   header: {
@@ -319,7 +511,6 @@ const styles = StyleSheet.create({
   },
   headerTitle: { color: COLORS.white, fontSize: 22, fontWeight: "bold" },
   backButton: { padding: 5 },
-
   searchSection: { padding: 20 },
   searchLabel: {
     fontSize: 16,
@@ -339,7 +530,6 @@ const styles = StyleSheet.create({
   },
   searchIcon: { marginRight: 10 },
   searchInput: { flex: 1, fontSize: 16 },
-
   filtersContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -354,7 +544,6 @@ const styles = StyleSheet.create({
   filterPillActive: { backgroundColor: COLORS.secondary },
   filterText: { color: COLORS.gray, fontWeight: "bold", fontSize: 12 },
   filterTextActive: { color: COLORS.white },
-
   listContent: { padding: 20, paddingBottom: 100 },
   clientCard: {
     flexDirection: "row",
@@ -363,10 +552,6 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 12,
     marginBottom: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
     elevation: 2,
   },
   clientIconBox: { marginRight: 15 },
@@ -381,7 +566,17 @@ const styles = StyleSheet.create({
   clientPhone: { fontSize: 14, color: COLORS.gray, marginLeft: 5 },
   lastPurchase: { fontSize: 12, color: COLORS.gray },
 
-  // ESTILOS DEL MODAL (POP-UP)
+  // ESTILOS DE LA NUEVA ALERTA A LA DERECHA
+  rightActionContainer: { flexDirection: "row", alignItems: "center" },
+  listAlertBadgeRight: {
+    backgroundColor: COLORS.secondary,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    marginRight: 5,
+  },
+  listAlertBadgeText: { color: COLORS.white, fontWeight: "bold", fontSize: 10 },
+
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.6)",
@@ -394,10 +589,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
     borderRadius: 20,
     padding: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
     elevation: 10,
   },
   closeModalButton: {
@@ -430,17 +621,11 @@ const styles = StyleSheet.create({
     borderRadius: 15,
   },
   alertBadgeText: { color: COLORS.white, fontWeight: "bold", fontSize: 12 },
-
   historyContainer: {
     backgroundColor: COLORS.white,
     borderRadius: 15,
     padding: 15,
     marginBottom: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
   },
   historyTitle: {
     textAlign: "center",
@@ -449,29 +634,16 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     marginBottom: 10,
   },
-  historyList: { borderTopWidth: 1, borderTopColor: "#EEE" },
   historyItem: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#EEE",
   },
   historyText: { flex: 2, fontSize: 12, color: COLORS.text },
-  historyWeight: {
-    flex: 1,
-    fontSize: 12,
-    color: COLORS.text,
-    textAlign: "center",
-  },
-  historyPrice: {
-    flex: 1,
-    fontSize: 12,
-    color: COLORS.text,
-    textAlign: "right",
-  },
-
+  historyWeight: { flex: 1, fontSize: 12, textAlign: "center" },
+  historyPrice: { flex: 1, fontSize: 12, textAlign: "right" },
   reminderButton: {
     backgroundColor: COLORS.secondary,
     flexDirection: "row",
@@ -479,7 +651,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 15,
     borderRadius: 25,
-    marginBottom: 10,
   },
   whatsappButton: {
     backgroundColor: COLORS.success,
@@ -490,4 +661,41 @@ const styles = StyleSheet.create({
     borderRadius: 25,
   },
   actionButtonText: { color: COLORS.white, fontSize: 16, fontWeight: "bold" },
+  deleteButton: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 10,
+    marginTop: 5,
+  },
+  deleteButtonText: {
+    color: COLORS.secondary,
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  quickDatesContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 15,
+  },
+  quickDateButton: {
+    backgroundColor: "#E0E0E0",
+    paddingVertical: 10,
+    borderRadius: 10,
+    flex: 1,
+    marginHorizontal: 4,
+    alignItems: "center",
+  },
+  quickDateButtonActive: { backgroundColor: COLORS.secondary },
+  quickDateText: { color: COLORS.gray, fontWeight: "bold" },
+  quickDateTextActive: { color: COLORS.white },
+  datePickerButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 15,
+    borderWidth: 1,
+    borderColor: "#DDD",
+    borderRadius: 10,
+    backgroundColor: COLORS.white,
+  },
 });
