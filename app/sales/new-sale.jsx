@@ -34,6 +34,7 @@ export default function NewSaleScreen() {
 
   const [clientName, setClientName] = useState("");
   const [phone, setPhone] = useState("");
+  const [notes, setNotes] = useState("");
   const [coffeeType, setCoffeeType] = useState("Grano");
   const [quantity, setQuantity] = useState("1");
   const [total, setTotal] = useState("320");
@@ -150,6 +151,7 @@ export default function NewSaleScreen() {
         userId: user.uid,
         clientName,
         phone,
+        notes,
         coffeeType,
         quantity: requestedQty,
         total: parseFloat(total),
@@ -173,6 +175,8 @@ export default function NewSaleScreen() {
         await updateDoc(doc(db, "clients", existingClient.id), {
           name: clientName,
           lastPurchase: formattedDate,
+          latestNote: notes,
+          isNotified: false,
           history: [purchaseHistory, ...existingHistory],
         });
       } else {
@@ -181,7 +185,9 @@ export default function NewSaleScreen() {
           name: clientName,
           phone: phone,
           lastPurchase: formattedDate,
+          latestNote: notes,
           alertDays: 30, // Recordatorio por defecto de 1 mes
+          isNotified: false,
           history: [purchaseHistory],
         });
       }
@@ -265,6 +271,7 @@ export default function NewSaleScreen() {
                   onPress={() => {
                     setClientName(client.name);
                     setPhone(client.phone);
+                    setNotes(client.latestNote || "");
                     setShowDropdown(false);
                   }}
                 >
@@ -300,6 +307,30 @@ export default function NewSaleScreen() {
               maxLength={10}
               value={phone}
               onChangeText={setPhone}
+            />
+          </View>
+        </View>
+
+        {/* NUEVO CAMPO: NOTAS */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Notas (Opcional)</Text>
+          <View style={[styles.inputWrapper, { height: 80, alignItems: 'flex-start', paddingTop: 10 }]}>
+            <Ionicons name="document-text" size={20} color={COLORS.gray} style={styles.inputIcon, { marginTop: 2 }} />
+            <TextInput
+              style={[
+                styles.input, 
+                { 
+                  textAlignVertical: 'top', 
+                  paddingTop: 0,     
+                  paddingBottom: 0,  
+                  height: '100%'     
+                }
+              ]}
+              placeholder="Dirección, referencias, detalles..."
+              multiline={true}
+              numberOfLines={3}
+              value={notes}
+              onChangeText={setNotes}
             />
           </View>
         </View>

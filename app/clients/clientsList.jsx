@@ -122,9 +122,10 @@ export default function ClientsScreen() {
 
       await updateDoc(doc(db, "clients", selectedClient.id), {
         alertDays: finalDays,
+        isNotified: false
       });
 
-      setSelectedClient({ ...selectedClient, alertDays: finalDays });
+      setSelectedClient({ ...selectedClient, alertDays: finalDays, isNotified: false });
       setReminderModalVisible(false);
     } catch (error) {
       console.error(error);
@@ -133,8 +134,15 @@ export default function ClientsScreen() {
     }
   };
 
+  // LÓGICA DE FILTRADO CORREGIDA
   const filteredClients = clients
-    .filter((c) => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    .filter((c) => {
+      const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase());
+      if (activeFilter === "Alerta") {
+        return matchesSearch && !c.isNotified;
+      }
+      return matchesSearch;
+    })
     .sort((a, b) => {
       if (activeFilter === "A-Z") return a.name.localeCompare(b.name);
       if (activeFilter === "Alerta")
@@ -176,8 +184,13 @@ export default function ClientsScreen() {
       </View>
 
       <View style={styles.rightActionContainer}>
-        <View style={styles.listAlertBadgeRight}>
-          <Text style={styles.listAlertBadgeText}>{item.alertDays} d</Text>
+        <View style={[
+          styles.listAlertBadgeRight, 
+          item.isNotified && { backgroundColor: COLORS.success } // <--- Se pone verde
+        ]}>
+          <Text style={styles.listAlertBadgeText}>
+            {item.isNotified ? "Notificado" : `${item.alertDays} d`}
+          </Text>
         </View>
         <Ionicons name="chevron-forward" size={24} color={COLORS.gray} />
       </View>
@@ -306,12 +319,20 @@ export default function ClientsScreen() {
                   </View>
                 </View>
               </View>
-              <View style={styles.alertBadge}>
+              <View style={styles.alertBadge, selectedClient?.isNotified && { backgroundColor: COLORS.success}}>
                 <Text style={styles.alertBadgeText}>
-                  Alerta en {selectedClient?.alertDays} días
+                  {selectedClient?.isNotified ? "Notificado" : `Alerta en ${selectedClient?.alertDays} días`}
                 </Text>
               </View>
             </View>
+
+            {/* NUEVO: SECCIÓN DE NOTAS */}
+            {selectedClient?.latestNote ? (
+              <View style={styles.notesContainer}>
+                <Text style={styles.notesTitle}>Notas del cliente:</Text>
+                <Text style={styles.notesText}>{selectedClient.latestNote}</Text>
+              </View>
+            ) : null}
 
             <View style={styles.historyContainer}>
               <Text style={styles.historyTitle}>Historial de Compras</Text>
@@ -621,6 +642,16 @@ const styles = StyleSheet.create({
     borderRadius: 15,
   },
   alertBadgeText: { color: COLORS.white, fontWeight: "bold", fontSize: 12 },
+  notesContainer: {
+    backgroundColor: "#FFF9C4", // Amarillo tenue tipo "post-it"
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 15,
+    borderLeftWidth: 4,
+    borderLeftColor: "#FBC02D",
+  },
+  notesTitle: { fontWeight: "bold", color: "#F57F17", marginBottom: 2, fontSize: 12 },
+  notesText: { color: COLORS.text, fontSize: 14, fontStyle: "italic" },
   historyContainer: {
     backgroundColor: COLORS.white,
     borderRadius: 15,
