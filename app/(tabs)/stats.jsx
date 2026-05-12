@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import * as Print from "expo-print";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { collection, getDocs, onSnapshot, query, where } from "firebase/firestore";
 import { useEffect, useState } from "react";
@@ -14,8 +14,9 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
 } from "react-native";
+import * as XLSX from "xlsx-js-style";
 import { COLORS } from "../../constants/theme";
 import { useAuth } from "../../context/AuthContext";
 import { db } from "../../firebase/config";
@@ -23,7 +24,7 @@ import { db } from "../../firebase/config";
 export default function StatsScreen() {
   const { user } = useAuth();
 
-  const [activeFilter, setActiveFilter] = useState("Mes"); 
+  const [activeFilter, setActiveFilter] = useState("Mes");
   const filters = ["Hoy", "Semana", "Mes", "Año"];
 
   const [sales, setSales] = useState([]);
@@ -35,7 +36,7 @@ export default function StatsScreen() {
   const [availableMonths, setAvailableMonths] = useState([]);
   const [isFetchingMonths, setIsFetchingMonths] = useState(false);
 
-  // CARGAR VENTAS 
+  // CARGAR VENTAS (Optimizado para la vista de estadísticas)
   useEffect(() => {
     if (!user) return;
 
@@ -44,8 +45,8 @@ export default function StatsScreen() {
     const q = query(
       collection(db, "sales"),
       where("userId", "==", user.uid),
-      where("date", ">=", start.toISOString()), 
-      where("date", "<=", end.toISOString()), 
+      where("date", ">=", start.toISOString()),
+      where("date", "<=", end.toISOString())
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -70,7 +71,7 @@ export default function StatsScreen() {
       start.setDate(start.getDate() - day + 1);
       start.setHours(0, 0, 0, 0);
       end.setTime(start.getTime());
-      end.setDate(start.getDate() + 6);
+      end.setDate(end.getDate() + 6);
       end.setHours(23, 59, 59, 999);
     } else if (activeFilter === "Mes") {
       start.setDate(1);
@@ -91,13 +92,11 @@ export default function StatsScreen() {
 
   const shiftDate = (direction) => {
     if (direction === 1 && !canGoForward) return;
-
     const newDate = new Date(referenceDate);
     if (activeFilter === "Hoy") newDate.setDate(newDate.getDate() + direction);
     else if (activeFilter === "Semana") newDate.setDate(newDate.getDate() + direction * 7);
     else if (activeFilter === "Mes") newDate.setMonth(newDate.getMonth() + direction);
     else if (activeFilter === "Año") newDate.setFullYear(newDate.getFullYear() + direction);
-
     setReferenceDate(newDate);
   };
 
@@ -114,7 +113,6 @@ export default function StatsScreen() {
     if (activeFilter === "Año") return `${start.getFullYear()}`;
   };
 
-  // CALCULAR TOTALES PARA LA VISTA PRINCIPAL
   let mainTotalQty = 0;
   let mainTotalMoney = 0;
   let mainQtyGrano = 0, mainQtyMolido = 0, mainQtyExpresso = 0;
@@ -130,145 +128,179 @@ export default function StatsScreen() {
   const maxCoffee = Math.max(mainQtyGrano, mainQtyMolido, mainQtyExpresso, 10);
   const axisMax = Math.ceil(maxCoffee / 10) * 10;
 
-  // Reportes mensuales
+  // LÓGICA DE REPORTES MENSUALES (EXCEL)
 
-  // Meses con ventas
   const handleOpenReportModal = async () => {
     setReportModalVisible(true);
     setIsFetchingMonths(true);
 
     try {
-      const qAll = query(collection(db, "sales"), where("userId", "==", user.uid));
-      const querySnapshot = await getDocs(qAll);
+      //Descargamos Ventas e Inversiones al mismo tiempo
+      const qSales = query(collection(db, "sales"), where("userId", "==", user.uid));
+      const qInv = query(collection(db, "investments"), where("userId", "==", user.uid));
+      
+      const [salesSnap, invSnap] = await Promise.all([getDocs(qSales), getDocs(qInv)]);
       
       const monthsMap = {};
       const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
-      querySnapshot.docs.forEach(docSnap => {
+      //Agrupamos las ventas por mes
+      salesSnap.docs.forEach(docSnap => {
         const sale = docSnap.data();
         const d = new Date(sale.date);
-        const year = d.getFullYear();
-        const month = d.getMonth();
-        const key = `${year}-${month}`; 
-
-        if (!monthsMap[key]) {
-          monthsMap[key] = {
-            label: `${monthNames[month]} ${year}`,
-            sortKey: d.getTime(), 
-            sales: []
-          };
-        }
+        const key = `${d.getFullYear()}-${d.getMonth()}`;
+        if (!monthsMap[key]) monthsMap[key] = { label: `${monthNames[d.getMonth()].toUpperCase()} ${d.getFullYear()}`, sortKey: d.getTime(), sales: [], investments: [] };
         monthsMap[key].sales.push(sale);
+      });
+
+      //Agrupamos las inversiones por mes
+      invSnap.docs.forEach(docSnap => {
+        const inv = docSnap.data();
+        const d = new Date(inv.date);
+        const key = `${d.getFullYear()}-${d.getMonth()}`;
+        if (!monthsMap[key]) monthsMap[key] = { label: `${monthNames[d.getMonth()].toUpperCase()} ${d.getFullYear()}`, sortKey: d.getTime(), sales: [], investments: [] };
+        monthsMap[key].investments.push(inv);
       });
 
       const monthsArray = Object.values(monthsMap).sort((a, b) => b.sortKey - a.sortKey);
       setAvailableMonths(monthsArray);
 
     } catch (error) {
-      console.error("Error obteniendo meses:", error);
-      Alert.alert("Error", "No se pudieron cargar los meses disponibles.");
+      console.error("Error obteniendo datos:", error);
+      Alert.alert("Error", "No se pudieron cargar los datos.");
     } finally {
       setIsFetchingMonths(false);
     }
   };
 
-  // Generar PDF
-  const generatePDFForMonth = async (monthData) => {
-    // Calculamos totales solo de este mes específico
-    let totalQty = 0, totalMoney = 0;
-    let qtyGrano = 0, qtyMolido = 0, qtyExpresso = 0;
-    let moneyGrano = 0, moneyMolido = 0, moneyExpresso = 0;
-
-    monthData.sales.forEach((sale) => {
-      totalQty += sale.quantity || 0;
-      totalMoney += sale.total || 0;
-      if (sale.coffeeType === "Grano") { qtyGrano += sale.quantity; moneyGrano += sale.total; }
-      else if (sale.coffeeType === "Molido") { qtyMolido += sale.quantity; moneyMolido += sale.total; }
-      else if (sale.coffeeType === "Expresso") { qtyExpresso += sale.quantity; moneyExpresso += sale.total; }
-    });
-
-    const costoGrano = 0; 
-    const costoMolido = 0;
-    const costoExpresso = 0;
-    const costoTotal = 0; 
-
-    const gananciaGrano = moneyGrano - costoGrano;
-    const gananciaMolido = moneyMolido - costoMolido;
-    const gananciaExpresso = moneyExpresso - costoExpresso;
-    const gananciaTotal = totalMoney - costoTotal;
-
-    const htmlContent = `
-      <html>
-        <head>
-          <style>
-            body { font-family: 'Helvetica', sans-serif; padding: 40px; color: #333; }
-            h1 { color: #5D4037; text-align: center; }
-            p { text-align: center; font-size: 16px; color: #666; margin-bottom: 30px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            th, td { border: 1px solid #ddd; padding: 12px; text-align: center; }
-            th { background-color: #5D4037; color: white; }
-            tr:nth-child(even) { background-color: #f2f2f2; }
-            .total-row { font-weight: bold; background-color: #d7ccc8 !important; }
-            .profit-col { color: #2e7d32; font-weight: bold; }
-          </style>
-        </head>
-        <body>
-          <h1>Reporte de Ventas - Café Otilia</h1>
-          <p>Reporte correspondiente a: <strong>${monthData.label}</strong></p>
-          
-          <table>
-            <tr>
-              <th>Tipo de Café</th>
-              <th>Cantidad Vendida (kg)</th>
-              <th>Ingresos Totales</th>
-              <th>Inversión (Costo)</th>
-              <th>Ganancia Neta</th>
-            </tr>
-            <tr>
-              <td>Grano</td>
-              <td>${qtyGrano} kg</td>
-              <td>$${moneyGrano}</td>
-              <td>$${costoGrano}</td>
-              <td class="profit-col">$${gananciaGrano}</td>
-            </tr>
-            <tr>
-              <td>Molido</td>
-              <td>${qtyMolido} kg</td>
-              <td>$${moneyMolido}</td>
-              <td>$${costoMolido}</td>
-              <td class="profit-col">$${gananciaMolido}</td>
-            </tr>
-            <tr>
-              <td>Expresso</td>
-              <td>${qtyExpresso} kg</td>
-              <td>$${moneyExpresso}</td>
-              <td>$${costoExpresso}</td>
-              <td class="profit-col">$${gananciaExpresso}</td>
-            </tr>
-            <tr class="total-row">
-              <td>TOTAL GENERAL</td>
-              <td>${totalQty} kg</td>
-              <td>$${totalMoney}</td>
-              <td>$${costoTotal}</td>
-              <td class="profit-col">$${gananciaTotal}</td>
-            </tr>
-          </table>
-          
-          <p style="margin-top: 50px; font-size: 12px; text-align: left;">
-            Generado automáticamente desde la aplicación Café Otilia.<br>
-            Fecha de generación: ${new Date().toLocaleDateString("es-ES")}
-          </p>
-        </body>
-      </html>
-    `;
-
+  const generateExcelForMonth = async (monthData) => {
     try {
-      const { uri } = await Print.printToFileAsync({ html: htmlContent });
-      setReportModalVisible(false); 
-      await Sharing.shareAsync(uri, { dialogTitle: "Compartir Reporte", mimeType: "application/pdf" });
+      // Calcular totales de Ventas
+      let qtyGrano = 0, qtyMolido = 0, qtyExpresso = 0;
+      let moneyGrano = 0, moneyMolido = 0, moneyExpresso = 0;
+
+      monthData.sales.forEach((sale) => {
+        if (sale.coffeeType === "Grano") { qtyGrano += sale.quantity; moneyGrano += sale.total; }
+        else if (sale.coffeeType === "Molido") { qtyMolido += sale.quantity; moneyMolido += sale.total; }
+        else if (sale.coffeeType === "Expresso") { qtyExpresso += sale.quantity; moneyExpresso += sale.total; }
+      });
+
+      const totalQty = qtyGrano + qtyMolido + qtyExpresso;
+      const totalVentas = moneyGrano + moneyMolido + moneyExpresso;
+
+      // Calcular totales de Inversiones
+      let costoEtiquetas = 0, costoEnvio = 0, costoCafe = 0;
+      monthData.investments.forEach((inv) => {
+        if (inv.type === "Etiquetas") costoEtiquetas += inv.amount;
+        if (inv.type === "Envío") costoEnvio += inv.amount;
+        if (inv.type === "Café") costoCafe += inv.amount;
+      });
+
+      const totalInversion = costoEtiquetas + costoEnvio + costoCafe;
+
+      // Resumen Financiero
+      const gananciaNeta = totalVentas - totalInversion;
+
+      // ESTILOS VISUALES PARA EL EXCEL (Café Otilia)
+      const TITLE_STYLE = { font: { bold: true, sz: 16, color: { rgb: "5D4037" } } };
+      const SUBTITLE_STYLE = { font: { bold: true, italic: true, color: { rgb: "795548" } } };
+      
+      const BORDER = {
+        top: { style: "thin", color: { rgb: "DDDDDD" } },
+        bottom: { style: "thin", color: { rgb: "DDDDDD" } },
+        left: { style: "thin", color: { rgb: "DDDDDD" } },
+        right: { style: "thin", color: { rgb: "DDDDDD" } }
+      };
+
+      const HEADER_STYLE = { fill: { fgColor: { rgb: "5D4037" } }, font: { bold: true, color: { rgb: "FFFFFF" } }, alignment: { horizontal: "center", vertical: "center" }, border: BORDER };
+      const ROW_STYLE = { alignment: { horizontal: "center" }, border: BORDER };
+      const TOTAL_STYLE = { fill: { fgColor: { rgb: "D7CCC8" } }, font: { bold: true, color: { rgb: "4E342E" } }, alignment: { horizontal: "center" }, border: BORDER };
+      const PROFIT_STYLE = { fill: { fgColor: { rgb: "E8F5E9" } }, font: { bold: true, color: { rgb: "2E7D32" } }, alignment: { horizontal: "center" }, border: BORDER };
+
+      // CONSTRUIR LAS CELDAS CON SUS ESTILOS
+      const excelData = [
+        [{ v: "Reporte de Ventas - Café Otilia", s: TITLE_STYLE }],
+        [{ v: `Reporte correspondiente a: ${monthData.label}`, s: SUBTITLE_STYLE }],
+        [], 
+        [
+          // Fila 4: Cabeceras Principales
+          { v: "Reporte de Ventas", s: HEADER_STYLE }, "", "", "", "",
+          { v: "Reporte de Inversiones", s: HEADER_STYLE }, "", "", "",
+          { v: "Resumen Financiero", s: HEADER_STYLE }, ""
+        ],
+        [
+          // Fila 5: Sub-Cabeceras
+          { v: "Tipo de Café", s: HEADER_STYLE }, { v: "Cantidad Vendida (kg)", s: HEADER_STYLE }, { v: "Ingresos Totales", s: HEADER_STYLE }, "", "",
+          { v: "Concepto", s: HEADER_STYLE }, { v: "Monto", s: HEADER_STYLE }, "", "",
+          "", "" // Espacio bajo Resumen
+        ],
+        [
+          // Fila 6: Grano / Etiquetas / Total Ingresos
+          { v: "Grano", s: ROW_STYLE }, { v: qtyGrano, s: ROW_STYLE }, { v: `$${moneyGrano}`, s: ROW_STYLE }, "", "",
+          { v: "Costo de Etiquetas", s: ROW_STYLE }, { v: `$${costoEtiquetas}`, s: ROW_STYLE }, "", "",
+          { v: "Total Ingresos Generados", s: TOTAL_STYLE }, { v: `$${totalVentas}`, s: TOTAL_STYLE }
+        ],
+        [
+          // Fila 7: Molido / Envío / Ganancia Neta
+          { v: "Molido", s: ROW_STYLE }, { v: qtyMolido, s: ROW_STYLE }, { v: `$${moneyMolido}`, s: ROW_STYLE }, "", "",
+          { v: "Costo de Envío", s: ROW_STYLE }, { v: `$${costoEnvio}`, s: ROW_STYLE }, "", "",
+          { v: "Ganancia NETA", s: PROFIT_STYLE }, { v: `$${gananciaNeta}`, s: PROFIT_STYLE }
+        ],
+        [
+          // Fila 8: Expresso / Café Comprado
+          { v: "Expresso", s: ROW_STYLE }, { v: qtyExpresso, s: ROW_STYLE }, { v: `$${moneyExpresso}`, s: ROW_STYLE }, "", "",
+          { v: "Costo Cantidad Comprada (Kg)", s: ROW_STYLE }, { v: `$${costoCafe}`, s: ROW_STYLE }
+        ],
+        [
+          // Fila 9: Totales Inferiores
+          { v: "TOTAL VENTAS", s: TOTAL_STYLE }, { v: totalQty, s: TOTAL_STYLE }, { v: `$${totalVentas}`, s: TOTAL_STYLE }, "", "",
+          { v: "Total Inversión", s: TOTAL_STYLE }, { v: `$${totalInversion}`, s: TOTAL_STYLE }
+        ]
+      ];
+
+      const worksheet = XLSX.utils.aoa_to_sheet(excelData);
+
+      // TAMAÑO DE COLUMNAS Y CELDAS COMBINADAS
+      
+      // Ajustamos el ancho de las columnas (wch = width character)
+      worksheet["!cols"] = [
+        { wch: 18 }, { wch: 22 }, { wch: 18 }, { wch: 3 }, { wch: 3 }, // Sección Ventas y separadores
+        { wch: 28 }, { wch: 15 }, { wch: 3 }, { wch: 3 },              // Sección Inversiones y separadores
+        { wch: 25 }, { wch: 15 }                                       // Sección Resumen Financiero
+      ];
+
+      // Combinamos las celdas de los títulos principales para que se centren (Como "Combinar y Centrar" de Excel)
+      worksheet["!merges"] = [
+        { s: { r: 3, c: 0 }, e: { r: 3, c: 2 } }, // Reporte de Ventas (A4:C4)
+        { s: { r: 3, c: 5 }, e: { r: 3, c: 6 } }, // Reporte de Inversiones (F4:G4)
+        { s: { r: 3, c: 9 }, e: { r: 3, c: 10 } } // Resumen Financiero (J4:K4)
+      ];
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Reporte Mensual");
+
+      // Generar el archivo Base64 y guardarlo
+      const wbout = XLSX.write(workbook, { type: "base64", bookType: "xlsx" });
+      const fileName = `Reporte_CafeOtilia_${monthData.label.replace(" ", "_")}.xlsx`;
+      const uri = FileSystem.cacheDirectory + fileName;
+
+      await FileSystem.writeAsStringAsync(uri, wbout, {
+        encoding: "base64",
+      });
+
+      setReportModalVisible(false);
+
+      // Compartir el Excel
+      await Sharing.shareAsync(uri, {
+        mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        dialogTitle: "Guardar Reporte Excel",
+        UTI: "com.microsoft.excel.xls",
+        proxyResources: true
+      });
+
     } catch (error) {
       console.error(error);
-      Alert.alert("Error", "No se pudo generar el reporte");
+      Alert.alert("Error", "Hubo un problema al generar el archivo Excel.");
     }
   };
 
@@ -280,32 +312,20 @@ export default function StatsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* FILTROS PRINCIPALES */}
         <View style={styles.filtersContainer}>
           {filters.map((filter) => (
-            <TouchableOpacity
-              key={filter}
-              style={[styles.filterPill, activeFilter === filter && styles.filterPillActive]}
-              onPress={() => handleFilterChange(filter)}
-            >
+            <TouchableOpacity key={filter} style={[styles.filterPill, activeFilter === filter && styles.filterPillActive]} onPress={() => handleFilterChange(filter)}>
               <Text style={[styles.filterText, activeFilter === filter && styles.filterTextActive]}>{filter}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* NAVEGADOR DE TIEMPO (< MES >) */}
         <View style={styles.periodNavigator}>
           <TouchableOpacity onPress={() => shiftDate(-1)} style={styles.navButton}>
             <Ionicons name="chevron-back" size={24} color={COLORS.primary} />
           </TouchableOpacity>
-
           <Text style={styles.periodText}>{getPeriodText()}</Text>
-
-          <TouchableOpacity
-            onPress={() => shiftDate(1)}
-            style={[styles.navButton, !canGoForward && { opacity: 0.3 }]}
-            disabled={!canGoForward}
-          >
+          <TouchableOpacity onPress={() => shiftDate(1)} style={[styles.navButton, !canGoForward && { opacity: 0.3 }]} disabled={!canGoForward}>
             <Ionicons name="chevron-forward" size={24} color={canGoForward ? COLORS.primary : COLORS.gray} />
           </TouchableOpacity>
         </View>
@@ -343,7 +363,6 @@ export default function StatsScreen() {
                 <Text style={{ textAlign: "center", color: COLORS.gray, paddingVertical: 50 }}>No hay ventas en este período.</Text>
               ) : (
                 <View style={styles.chartContainer}>
-                  {/* EJE Y CON KG */}
                   <View style={styles.yAxis}>
                     <Text style={styles.axisText}>{axisMax} kg</Text>
                     <Text style={styles.axisText}>{axisMax * 0.75} kg</Text>
@@ -384,7 +403,7 @@ export default function StatsScreen() {
             {/* BOTÓN PARA ABRIR MODAL DE REPORTES */}
             <TouchableOpacity style={styles.reportButton} onPress={handleOpenReportModal}>
               <Ionicons name="document-text" size={20} color={COLORS.white} style={{ marginRight: 8 }} />
-              <Text style={styles.reportButtonText}>Generar Reporte Mensual</Text>
+              <Text style={styles.reportButtonText}>Exportar Reporte a Excel</Text>
             </TouchableOpacity>
           </>
         )}
@@ -398,20 +417,20 @@ export default function StatsScreen() {
               <Ionicons name="close" size={28} color={COLORS.gray} />
             </TouchableOpacity>
             
-            <Text style={styles.modalTitle}>Generar Reporte</Text>
-            <Text style={styles.modalSubtitle}>Selecciona el mes que deseas consultar:</Text>
+            <Text style={styles.modalTitle}>Generar Excel</Text>
+            <Text style={styles.modalSubtitle}>Selecciona el mes que deseas exportar:</Text>
 
             {isFetchingMonths ? (
               <ActivityIndicator size="large" color={COLORS.primary} style={{ marginVertical: 30 }} />
             ) : availableMonths.length === 0 ? (
-              <Text style={styles.noMonthsText}>Aún no hay meses con ventas registradas.</Text>
+              <Text style={styles.noMonthsText}>Aún no hay meses con registros.</Text>
             ) : (
               <ScrollView style={{ maxHeight: 300, marginTop: 10 }}>
                 {availableMonths.map((monthObj) => (
                   <TouchableOpacity 
                     key={monthObj.label} 
                     style={styles.monthOption}
-                    onPress={() => generatePDFForMonth(monthObj)}
+                    onPress={() => generateExcelForMonth(monthObj)}
                   >
                     <Ionicons name="calendar-outline" size={24} color={COLORS.primary} />
                     <Text style={styles.monthOptionText}>{monthObj.label}</Text>
@@ -423,12 +442,10 @@ export default function StatsScreen() {
           </Pressable>
         </Pressable>
       </Modal>
-
     </View>
   );
 }
 
-// Estilos
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   header: { backgroundColor: COLORS.primary, paddingHorizontal: 20, paddingBottom: 20, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, alignItems: "center" },
@@ -463,10 +480,9 @@ const styles = StyleSheet.create({
   barFill: { backgroundColor: COLORS.primary, borderTopLeftRadius: 5, borderTopRightRadius: 5, width: "100%" },
   barLabel: { marginTop: 10, fontSize: 12, color: COLORS.text, fontWeight: "bold" },
 
-  reportButton: { backgroundColor: COLORS.secondary, flexDirection: "row", justifyContent: "center", alignItems: "center", paddingVertical: 15, borderRadius: 12, elevation: 4 },
+  reportButton: { backgroundColor: "#1D6F42", flexDirection: "row", justifyContent: "center", alignItems: "center", paddingVertical: 15, borderRadius: 12, elevation: 4 }, // Cambié a un color Verde Excel
   reportButtonText: { color: COLORS.white, fontSize: 16, fontWeight: "bold" },
 
-  // ESTILOS DEL MODAL DE REPORTES
   modalOverlay: { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.6)", justifyContent: "center", alignItems: "center", padding: 20 },
   modalCard: { width: "100%", backgroundColor: COLORS.white, borderRadius: 20, padding: 25, elevation: 10 },
   closeModalButton: { position: "absolute", top: 15, right: 15, zIndex: 10, padding: 5 },

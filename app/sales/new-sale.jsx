@@ -124,10 +124,36 @@ export default function NewSaleScreen() {
     : [];
 
   // REGISTRO DE VENTA Y DESCUENTO DE STOCK
-  const handleRegisterSale = async () => {
+ const handleRegisterSale = async () => {
     if (!clientName.trim() || !phone.trim() || !quantity || !total) {
-      Alert.alert("Error", "Por favor llena todos los campos.");
+      Alert.alert("Error", "Por favor llena todos los campos obligatorios.");
       return;
+    }
+
+    // VALIDACIÓN DE CLIENTE Y TELÉFONO ▼▼▼
+    const nameToCheck = clientName.trim().toLowerCase();
+    const phoneToCheck = phone.trim();
+
+    // Buscamos si ya hay alguien con ese mismo nombre o ese mismo teléfono
+    const existingByName = clientsDb.find((c) => c.name.toLowerCase() === nameToCheck);
+    const existingByPhone = clientsDb.find((c) => c.phone === phoneToCheck);
+
+    //El nombre ya existe, pero el teléfono es diferente
+    if (existingByName && existingByName.phone !== phoneToCheck) {
+      Alert.alert(
+        "Datos Inconsistentes",
+        `El cliente "${existingByName.name}" ya está registrado con el número ${existingByName.phone}.`
+      );
+      return; // Detiene el registro
+    }
+
+    //El teléfono ya existe, pero el nombre es diferente
+    if (existingByPhone && existingByPhone.name.toLowerCase() !== nameToCheck) {
+      Alert.alert(
+        "Número Ocupado",
+        `El número ${phoneToCheck} le pertenece a "${existingByPhone.name}". Verifica a quién le estás vendiendo.`
+      );
+      return; // Detiene el registro
     }
 
     // Validación de Inventario
@@ -177,6 +203,7 @@ export default function NewSaleScreen() {
           lastPurchase: formattedDate,
           latestNote: notes,
           isNotified: false,
+          alertDays: 30,
           history: [purchaseHistory, ...existingHistory],
         });
       } else {
