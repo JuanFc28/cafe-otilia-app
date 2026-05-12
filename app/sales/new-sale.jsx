@@ -279,6 +279,7 @@ export default function NewSaleScreen() {
             <TextInput
               style={styles.input}
               placeholder="Ej. Alejo Cruz"
+              placeholderTextColor="#999999"
               value={clientName}
               onChangeText={(text) => {
                 setClientName(text);
@@ -330,6 +331,7 @@ export default function NewSaleScreen() {
             <TextInput
               style={styles.input}
               placeholder="Ej. 2222064814"
+              placeholderTextColor="#999999"
               keyboardType="phone-pad"
               maxLength={10}
               value={phone}
@@ -354,6 +356,7 @@ export default function NewSaleScreen() {
                 }
               ]}
               placeholder="Dirección, referencias, detalles..."
+              placeholderTextColor="#999999"
               multiline={true}
               numberOfLines={3}
               value={notes}

@@ -231,6 +231,7 @@ export default function ClientsScreen() {
           <TextInput
             style={styles.searchInput}
             placeholder="Buscar por nombre..."
+            placeholderTextColor="#999999"
             value={searchQuery}
             onChangeText={setSearchQuery}
           />

@@ -298,7 +298,7 @@ export default function StockScreen() {
               </View>
               <View style={styles.inputWrapper}>
                 <Text style={styles.inputLabel}>Cantidad (kg):</Text>
-                <TextInput style={styles.amountInput} keyboardType="decimal-pad" placeholder="Ej. 1.5" value={amountToChange} onChangeText={(text) => setAmountToChange(text.replace(/[^0-9.]/g, ""))} />
+                <TextInput style={styles.amountInput} keyboardType="decimal-pad" placeholder="Ej. 1.5" placeholderTextColor="#999999" value={amountToChange} onChangeText={(text) => setAmountToChange(text.replace(/[^0-9.]/g, ""))} />
               </View>
               <TouchableOpacity style={styles.confirmButton} onPress={handleConfirmStock} disabled={isSubmitting}>
                 {isSubmitting ? <ActivityIndicator color={COLORS.white} /> : <Text style={styles.confirmButtonText}>Confirmar Actualización</Text>}
@@ -409,6 +409,7 @@ export default function StockScreen() {
                       style={[styles.amountInput, { textAlign: "left", flex: 1 }]}
                       keyboardType="decimal-pad"
                       placeholder="0.00"
+                      placeholderTextColor="#999999"
                       value={invAmount}
                       onChangeText={(text) => setInvAmount(text.replace(/[^0-9.]/g, ""))}
                     />
