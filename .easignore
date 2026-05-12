@@ -3,3 +3,4 @@ node_modules
 .vscode
 .git
 .react
+node_modules/
