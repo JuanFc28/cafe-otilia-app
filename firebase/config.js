@@ -14,13 +14,13 @@ import { Platform } from "react-native";
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyBSUUzGWPPFQgGBI_9o_vQBvjO6LNVhh5A",
-  authDomain: "cafe-otilia.firebaseapp.com",
-  projectId: "cafe-otilia",
-  storageBucket: "cafe-otilia.firebasestorage.app",
-  messagingSenderId: "934341662273",
-  appId: "1:934341662273:web:8bcea3e54737fa7b0ad8c0",
-  measurementId: "G-LRWK3BLQDF",
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID 
 };
 
 const app = initializeApp(firebaseConfig);
