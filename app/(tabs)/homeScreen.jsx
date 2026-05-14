@@ -79,8 +79,11 @@ export default function HomeScreen() {
   }, [user]);
 
   const openWhatsApp = (phone) => {
-    const url = `https://wa.me/52${phone}`;
-    Linking.openURL(url);
+    const message = `Hola, soy Alejo Cruz de Café Otilia ☕️. Confiamos en que esté disfrutando el aroma y sabor de su café. Quedamos atentos a sus nuevos pedidos 📝. ¡Excelente dia! ✨`;
+    const url = `https://wa.me/52${phone}?text=${encodeURIComponent(message)}`;
+    Linking.openURL(url).catch(() =>
+      alert("Asegúrate de tener WhatsApp instalado"),
+    );
   };
 
   const markAsNotified = (clientId, clientName) => {

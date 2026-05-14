@@ -3,6 +3,7 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   onSnapshot,
   query,
@@ -32,7 +33,6 @@ import { db } from "../../firebase/config";
 export default function StockScreen() {
   const { user } = useAuth();
 
-  // ESTADOS DEL INVENTARIO
   const [stock, setStock] = useState({
     grano: "0",
     molido: "0",
@@ -52,16 +52,13 @@ export default function StockScreen() {
     { id: "expresso", name: "Expresso", icon: "color-fill" },
   ];
 
-  // ESTADOS DE INVERSIONES
   const [investments, setInvestments] = useState([]);
   const [isInvModalVisible, setInvModalVisible] = useState(false);
   const [showNewInvForm, setShowNewInvForm] = useState(false);
 
-  // Estados de Paginación
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 7;
 
-  // Formulario de Inversión
   const [invType, setInvType] = useState("Café");
   const [invAmount, setInvAmount] = useState("");
   const [invDate, setInvDate] = useState(new Date());
@@ -86,11 +83,9 @@ export default function StockScreen() {
     year: "numeric",
   });
 
-  // EFECTOS (CARGAR DATOS)
   useEffect(() => {
     if (!user) return;
 
-    // Escuchar el Inventario
     const stockRef = doc(db, "stock", user.uid);
     const unsubscribeStock = onSnapshot(stockRef, (docSnap) => {
       if (docSnap.exists()) {
@@ -101,7 +96,6 @@ export default function StockScreen() {
       setLoading(false);
     });
 
-    // Escuchar las Inversiones
     const qInv = query(collection(db, "investments"), where("userId", "==", user.uid));
     const unsubscribeInv = onSnapshot(qInv, (snapshot) => {
       const docs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
@@ -115,7 +109,6 @@ export default function StockScreen() {
     };
   }, [user]);
 
-  // LÓGICA DE PAGINACIÓN
   const totalPages = Math.ceil(investments.length / itemsPerPage);
   const paginatedInvestments = investments.slice(
     (currentPage - 1) * itemsPerPage,
@@ -130,7 +123,6 @@ export default function StockScreen() {
     if (currentPage > 1) setCurrentPage(currentPage - 1);
   };
 
-  // FUNCIONES DE GUARDADO
   const handleConfirmStock = async () => {
     if (!amountToChange || parseFloat(amountToChange) <= 0) {
       Alert.alert("Atención", "Ingresa una cantidad válida mayor a 0.");
@@ -189,6 +181,31 @@ export default function StockScreen() {
     } finally {
       setIsSavingInv(false);
     }
+  };
+
+  const handleDeleteInvestment = (invId) => {
+    Alert.alert(
+      "Eliminar Inversión",
+      "¿Estás seguro de que deseas eliminar este registro? Esta acción afectará el reporte final.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteDoc(doc(db, "investments", invId));
+              if (paginatedInvestments.length === 1 && currentPage > 1) {
+                setCurrentPage(currentPage - 1);
+              }
+            } catch (error) {
+              console.error("Error al eliminar inversión: ", error);
+              Alert.alert("Error", "No se pudo eliminar el registro.");
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -259,7 +276,6 @@ export default function StockScreen() {
         )}
       </ScrollView>
 
-      {/* MODAL GESTIÓN DE INVENTARIO             */}
       <Modal animationType="slide" transparent={true} visible={isModalVisible} onRequestClose={() => setModalVisible(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay}>
           <Pressable style={styles.modalOverlay} onPress={() => setModalVisible(false)}>
@@ -298,7 +314,7 @@ export default function StockScreen() {
               </View>
               <View style={styles.inputWrapper}>
                 <Text style={styles.inputLabel}>Cantidad (kg):</Text>
-                <TextInput style={styles.amountInput} keyboardType="decimal-pad" placeholder="Ej. 1.5" placeholderTextColor="#999999" value={amountToChange} onChangeText={(text) => setAmountToChange(text.replace(/[^0-9.]/g, ""))} />
+                <TextInput style={[styles.amountInput, { textAlign: "right", flex: 1 }]} keyboardType="decimal-pad" placeholder="Ej. 1.5" placeholderTextColor="#999999" value={amountToChange} onChangeText={(text) => setAmountToChange(text.replace(/[^0-9.]/g, ""))} />
               </View>
               <TouchableOpacity style={styles.confirmButton} onPress={handleConfirmStock} disabled={isSubmitting}>
                 {isSubmitting ? <ActivityIndicator color={COLORS.white} /> : <Text style={styles.confirmButtonText}>Confirmar Actualización</Text>}
@@ -308,9 +324,7 @@ export default function StockScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* MODAL INVERSIONES */}
       <Modal animationType="fade" transparent={true} visible={isInvModalVisible} onRequestClose={() => setInvModalVisible(false)}>
-        {/* Corrección aquí: quitamos styles.centeredModalOverlay del KeyboardAvoidingView para evitar doble fondo negro */}
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
           <Pressable style={styles.centeredModalOverlay} onPress={() => setInvModalVisible(false)}>
             <Pressable style={styles.centeredModalCard} onPress={(e) => e.stopPropagation()}>
@@ -321,7 +335,6 @@ export default function StockScreen() {
 
               <Text style={styles.modalTitle}>Historial de Inversiones</Text>
 
-              {/* VISTA 1: TABLA DE INVERSIONES CON PAGINACIÓN */}
               {!showNewInvForm ? (
                 <>
                   <TouchableOpacity style={styles.newInvButton} onPress={() => setShowNewInvForm(true)}>
@@ -332,8 +345,9 @@ export default function StockScreen() {
                   <View style={styles.invTableContainer}>
                     <View style={styles.invTableHeader}>
                       <Text style={[styles.invHeaderText, { flex: 1.5 }]}>Fecha</Text>
-                      <Text style={[styles.invHeaderText, { flex: 2 }]}>Tipo</Text>
-                      <Text style={[styles.invHeaderText, { flex: 1.5, textAlign: "right" }]}>Monto</Text>
+                      <Text style={[styles.invHeaderText, { flex: 1.5 }]}>Tipo</Text>
+                      <Text style={[styles.invHeaderText, { flex: 1.2, textAlign: "right" }]}>Monto</Text>
+                      <View style={{ width: 35 }} />
                     </View>
                     
                     <View style={{ minHeight: 250 }}>
@@ -345,16 +359,22 @@ export default function StockScreen() {
                         paginatedInvestments.map((inv) => (
                           <View key={inv.id} style={styles.invTableRow}>
                             <Text style={[styles.invRowText, { flex: 1.5, fontSize: 12 }]}>{inv.formattedDate}</Text>
-                            <Text style={[styles.invRowText, { flex: 2, fontWeight: "bold" }]}>{inv.type}</Text>
-                            <Text style={[styles.invRowText, { flex: 1.5, textAlign: "right", color: COLORS.secondary, fontWeight: "bold" }]}>
+                            <Text style={[styles.invRowText, { flex: 1.5, fontWeight: "bold" }]}>{inv.type}</Text>
+                            <Text style={[styles.invRowText, { flex: 1.2, textAlign: "right", color: COLORS.secondary, fontWeight: "bold" }]}>
                               ${inv.amount}
                             </Text>
+                            
+                            <TouchableOpacity 
+                              style={{ width: 35, alignItems: "flex-end", justifyContent: "center" }}
+                              onPress={() => handleDeleteInvestment(inv.id)}
+                            >
+                              <Ionicons name="trash-outline" size={20} color="#E53935" />
+                            </TouchableOpacity>
                           </View>
                         ))
                       )}
                     </View>
 
-                    {/* PAGINACIÓN */}
                     {investments.length > itemsPerPage && (
                       <View style={styles.paginationContainer}>
                         <TouchableOpacity onPress={handlePrevPage} disabled={currentPage === 1}>
@@ -371,7 +391,6 @@ export default function StockScreen() {
                   </View>
                 </>
               ) : (
-                /* VISTA 2: FORMULARIO DE NUEVA INVERSIÓN */
                 <>
                   <TouchableOpacity style={{ flexDirection: "row", alignItems: "center", marginBottom: 15 }} onPress={() => setShowNewInvForm(false)}>
                     <Ionicons name="arrow-back" size={20} color={COLORS.primary} />
@@ -429,7 +448,6 @@ export default function StockScreen() {
   );
 }
 
-// ESTILOS
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   header: { backgroundColor: COLORS.primary, paddingHorizontal: 20, paddingBottom: 30, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, alignItems: "center" },
@@ -455,7 +473,6 @@ const styles = StyleSheet.create({
   modalOverlay: { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.5)", justifyContent: "flex-end" },
   modalCard: { backgroundColor: COLORS.white, borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, paddingBottom: 40, elevation: 10 },
   
-  // MODIFICACIONES DE ESTILOS DEL MODAL DE INVERSIONES
   centeredModalOverlay: { flex: 1, backgroundColor: "rgba(0, 0, 0, 0.6)", justifyContent: "center", padding: 12 }, 
   centeredModalCard: { backgroundColor: COLORS.white, borderRadius: 20, padding: 20, elevation: 10, width: "100%", minHeight: 450 },
 

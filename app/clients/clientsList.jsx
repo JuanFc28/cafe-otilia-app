@@ -61,7 +61,7 @@ export default function ClientsScreen() {
 
   // FUNCIÓN WHATSAPP CON MENSAJE PRECARGADO
   const openWhatsApp = (phone, name) => {
-    const message = `¡Hola ${name}! 👋🏼 Le escribo de Café Otilia. ¿Qué tal le pareció su último café? ☕ Esperamos que lo esté disfrutando mucho. ¿Le gustaría que le agendemos un nuevo pedido?`;
+    const message = `Hola, soy Alejo Cruz de Café Otilia ☕️. Confiamos en que esté disfrutando el aroma y sabor de su café. Quedamos atentos a sus nuevos pedidos 📝. ¡Excelente dia! ✨`;
     const url = `https://wa.me/52${phone}?text=${encodeURIComponent(message)}`;
     Linking.openURL(url).catch(() =>
       alert("Asegúrate de tener WhatsApp instalado"),
